@@ -20,8 +20,11 @@ import type {
   UpgradeDowngrade,
 } from "./types";
 
-const BASE_V3 = "https://financialmodelingprep.com/api/v3";
-const BASE_V4 = "https://financialmodelingprep.com/api/v4";
+// FMP retired the legacy /api/v3 and /api/v4 endpoints on 2025-08-31.
+// Every request now goes through the "stable" API, which uses query
+// parameters (?symbol=AAPL) instead of path segments (/AAPL) and
+// returns flat arrays rather than wrapped objects.
+const BASE = "https://financialmodelingprep.com/stable";
 
 function apiKey(): string {
   const key = process.env.FMP_API_KEY;
@@ -47,48 +50,118 @@ async function get<T>(url: string, revalidateSeconds = 300): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-function url(base: string, path: string, params: Record<string, string | number | undefined> = {}) {
+function url(path: string, params: Record<string, string | number | undefined> = {}) {
   const usp = new URLSearchParams();
   for (const [k, v] of Object.entries(params)) {
     if (v !== undefined) usp.set(k, String(v));
   }
   usp.set("apikey", apiKey());
-  return `${base}${path}?${usp.toString()}`;
+  return `${BASE}${path}?${usp.toString()}`;
+}
+
+/** Reads the first defined value among several possible field names — a
+ * defensive shim against FMP renaming fields between API versions. */
+function pick<T = number>(obj: Record<string, unknown>, ...keys: string[]): T | undefined {
+  for (const k of keys) {
+    if (obj[k] !== undefined && obj[k] !== null) return obj[k] as T;
+  }
+  return undefined;
+}
+
+function normalizeQuote(raw: Record<string, unknown>): Quote {
+  return {
+    symbol: pick<string>(raw, "symbol") ?? "",
+    name: pick<string>(raw, "name") ?? "",
+    price: pick(raw, "price") ?? 0,
+    changesPercentage: pick(raw, "changePercentage", "changesPercentage") ?? 0,
+    change: pick(raw, "change") ?? 0,
+    dayLow: pick(raw, "dayLow") ?? 0,
+    dayHigh: pick(raw, "dayHigh") ?? 0,
+    yearHigh: pick(raw, "yearHigh") ?? 0,
+    yearLow: pick(raw, "yearLow") ?? 0,
+    marketCap: pick(raw, "marketCap") ?? 0,
+    priceAvg50: pick(raw, "priceAvg50") ?? 0,
+    priceAvg200: pick(raw, "priceAvg200") ?? 0,
+    volume: pick(raw, "volume") ?? 0,
+    avgVolume: pick(raw, "avgVolume", "averageVolume") ?? 0,
+    open: pick(raw, "open") ?? 0,
+    previousClose: pick(raw, "previousClose") ?? 0,
+    eps: pick(raw, "eps") ?? 0,
+    pe: pick(raw, "pe") ?? 0,
+    sharesOutstanding: pick(raw, "sharesOutstanding") ?? 0,
+    timestamp: pick(raw, "timestamp"),
+  };
+}
+
+function normalizeProfile(raw: Record<string, unknown>): CompanyProfile {
+  return {
+    symbol: pick<string>(raw, "symbol") ?? "",
+    companyName: pick<string>(raw, "companyName") ?? "",
+    price: pick(raw, "price") ?? 0,
+    changes: pick(raw, "change", "changes") ?? 0,
+    changesPercentage: pick(raw, "changePercentage", "changesPercentage"),
+    currency: pick<string>(raw, "currency") ?? "USD",
+    cik: pick<string>(raw, "cik"),
+    isin: pick<string>(raw, "isin"),
+    exchangeShortName: pick<string>(raw, "exchangeShortName", "exchange") ?? "",
+    industry: pick<string>(raw, "industry") ?? "",
+    sector: pick<string>(raw, "sector") ?? "",
+    country: pick<string>(raw, "country") ?? "",
+    website: pick<string>(raw, "website") ?? "",
+    description: pick<string>(raw, "description") ?? "",
+    ceo: pick<string>(raw, "ceo") ?? "",
+    fullTimeEmployees: pick<string>(raw, "fullTimeEmployees") ?? "",
+    image: pick<string>(raw, "image") ?? "",
+    ipoDate: pick<string>(raw, "ipoDate") ?? "",
+    mktCap: pick(raw, "marketCap", "mktCap") ?? 0,
+    beta: pick(raw, "beta") ?? 0,
+    volAvg: pick(raw, "averageVolume", "volAvg") ?? 0,
+    range: pick<string>(raw, "range") ?? "",
+    dcf: pick(raw, "dcf"),
+    dcfDiff: pick(raw, "dcfDiff"),
+    isEtf: pick<boolean>(raw, "isEtf"),
+    isFund: pick<boolean>(raw, "isFund"),
+  };
+}
+
+function asArray<T>(data: unknown): T[] {
+  if (Array.isArray(data)) return data as T[];
+  if (data && typeof data === "object" && Array.isArray((data as { historical?: unknown }).historical)) {
+    return (data as { historical: T[] }).historical;
+  }
+  return [];
 }
 
 export async function searchSymbols(query: string): Promise<SearchResult[]> {
   if (!query.trim()) return [];
-  const data = await get<SearchResult[]>(
-    url(BASE_V3, "/search", { query, limit: 12 }),
-    60
-  );
-  return Array.isArray(data) ? data : [];
+  const data = await get<SearchResult[]>(url("/search-symbol", { query, limit: 12 }), 60);
+  return asArray<SearchResult>(data);
 }
 
 export async function getProfile(symbol: string): Promise<CompanyProfile | null> {
-  const data = await get<CompanyProfile[]>(url(BASE_V3, `/profile/${symbol}`));
-  return data?.[0] ?? null;
+  const data = await get<Record<string, unknown>[]>(url("/profile", { symbol }));
+  const raw = asArray<Record<string, unknown>>(data)[0];
+  return raw ? normalizeProfile(raw) : null;
 }
 
 export async function getQuote(symbol: string): Promise<Quote | null> {
-  const data = await get<Quote[]>(url(BASE_V3, `/quote/${symbol}`), 60);
-  return data?.[0] ?? null;
+  const data = await get<Record<string, unknown>[]>(url("/quote", { symbol }), 60);
+  const raw = asArray<Record<string, unknown>>(data)[0];
+  return raw ? normalizeQuote(raw) : null;
 }
 
 export async function getQuotes(symbols: string[]): Promise<Quote[]> {
   if (symbols.length === 0) return [];
-  const data = await get<Quote[]>(url(BASE_V3, `/quote/${symbols.join(",")}`), 60);
-  return Array.isArray(data) ? data : [];
+  const results = await Promise.all(symbols.map((s) => getQuote(s).catch(() => null)));
+  return results.filter((q): q is Quote => q !== null);
 }
 
 export async function getHistoricalPrices(
   symbol: string,
   opts: { from?: string; to?: string } = {}
 ): Promise<HistoricalPrice[]> {
-  const data = await get<{ historical: HistoricalPrice[] }>(
-    url(BASE_V3, `/historical-price-full/${symbol}`, opts)
-  );
-  const historical = data?.historical ?? [];
+  const data = await get<unknown>(url("/historical-price-eod/full", { symbol, ...opts }));
+  const historical = asArray<HistoricalPrice>(data);
   return [...historical].reverse();
 }
 
@@ -97,7 +170,8 @@ export async function getIncomeStatement(
   period: "annual" | "quarter" = "annual",
   limit = 10
 ): Promise<IncomeStatement[]> {
-  return get<IncomeStatement[]>(url(BASE_V3, `/income-statement/${symbol}`, { period, limit }));
+  const data = await get<unknown>(url("/income-statement", { symbol, period, limit }));
+  return asArray<IncomeStatement>(data);
 }
 
 export async function getBalanceSheet(
@@ -105,9 +179,8 @@ export async function getBalanceSheet(
   period: "annual" | "quarter" = "annual",
   limit = 10
 ): Promise<BalanceSheetStatement[]> {
-  return get<BalanceSheetStatement[]>(
-    url(BASE_V3, `/balance-sheet-statement/${symbol}`, { period, limit })
-  );
+  const data = await get<unknown>(url("/balance-sheet-statement", { symbol, period, limit }));
+  return asArray<BalanceSheetStatement>(data);
 }
 
 export async function getCashFlow(
@@ -115,9 +188,8 @@ export async function getCashFlow(
   period: "annual" | "quarter" = "annual",
   limit = 10
 ): Promise<CashFlowStatement[]> {
-  return get<CashFlowStatement[]>(
-    url(BASE_V3, `/cash-flow-statement/${symbol}`, { period, limit })
-  );
+  const data = await get<unknown>(url("/cash-flow-statement", { symbol, period, limit }));
+  return asArray<CashFlowStatement>(data);
 }
 
 export async function getRatios(
@@ -125,7 +197,8 @@ export async function getRatios(
   period: "annual" | "quarter" = "annual",
   limit = 10
 ): Promise<Ratio[]> {
-  return get<Ratio[]>(url(BASE_V3, `/ratios/${symbol}`, { period, limit }));
+  const data = await get<unknown>(url("/ratios", { symbol, period, limit }));
+  return asArray<Ratio>(data);
 }
 
 export async function getKeyMetrics(
@@ -133,7 +206,8 @@ export async function getKeyMetrics(
   period: "annual" | "quarter" = "annual",
   limit = 10
 ): Promise<KeyMetrics[]> {
-  return get<KeyMetrics[]>(url(BASE_V3, `/key-metrics/${symbol}`, { period, limit }));
+  const data = await get<unknown>(url("/key-metrics", { symbol, period, limit }));
+  return asArray<KeyMetrics>(data);
 }
 
 export async function getFinancialGrowth(
@@ -141,22 +215,25 @@ export async function getFinancialGrowth(
   period: "annual" | "quarter" = "annual",
   limit = 10
 ): Promise<FinancialGrowth[]> {
-  return get<FinancialGrowth[]>(
-    url(BASE_V3, `/financial-growth/${symbol}`, { period, limit })
-  );
+  const data = await get<unknown>(url("/financial-growth", { symbol, period, limit }));
+  return asArray<FinancialGrowth>(data);
 }
 
 export async function getAnalystEstimates(symbol: string): Promise<AnalystEstimate[]> {
-  return get<AnalystEstimate[]>(url(BASE_V3, `/analyst-estimates/${symbol}`, { limit: 8 }));
+  try {
+    const data = await get<unknown>(url("/analyst-estimates", { symbol, period: "annual", limit: 8 }));
+    return asArray<AnalystEstimate>(data);
+  } catch {
+    return [];
+  }
 }
 
 export async function getPriceTargetSummary(symbol: string): Promise<PriceTargetSummary | null> {
   try {
-    const data = await get<PriceTargetSummary[] | PriceTargetSummary>(
-      url(BASE_V4, "/price-target-summary", { symbol })
-    );
-    if (Array.isArray(data)) return data[0] ?? null;
-    return data ?? null;
+    const data = await get<unknown>(url("/price-target-summary", { symbol }));
+    const arr = asArray<PriceTargetSummary>(data);
+    if (arr.length > 0) return arr[0];
+    return (data as PriceTargetSummary) ?? null;
   } catch {
     return null;
   }
@@ -164,7 +241,8 @@ export async function getPriceTargetSummary(symbol: string): Promise<PriceTarget
 
 export async function getUpgradesDowngrades(symbol: string): Promise<UpgradeDowngrade[]> {
   try {
-    return await get<UpgradeDowngrade[]>(url(BASE_V4, "/upgrades-downgrades", { symbol }));
+    const data = await get<unknown>(url("/grades", { symbol }));
+    return asArray<UpgradeDowngrade>(data);
   } catch {
     return [];
   }
@@ -172,9 +250,8 @@ export async function getUpgradesDowngrades(symbol: string): Promise<UpgradeDown
 
 export async function getInstitutionalHolders(symbol: string): Promise<InstitutionalHolder[]> {
   try {
-    return await get<InstitutionalHolder[]>(
-      url(BASE_V3, `/institutional-holder/${symbol}`)
-    );
+    const data = await get<unknown>(url("/institutional-ownership/extract", { symbol }));
+    return asArray<InstitutionalHolder>(data);
   } catch {
     return [];
   }
@@ -182,9 +259,8 @@ export async function getInstitutionalHolders(symbol: string): Promise<Instituti
 
 export async function getInsiderTrades(symbol: string): Promise<InsiderTrade[]> {
   try {
-    return await get<InsiderTrade[]>(
-      url(BASE_V4, "/insider-trading", { symbol, page: 0 })
-    );
+    const data = await get<unknown>(url("/insider-trading/search", { symbol, page: 0 }));
+    return asArray<InsiderTrade>(data);
   } catch {
     return [];
   }
@@ -192,10 +268,8 @@ export async function getInsiderTrades(symbol: string): Promise<InsiderTrade[]> 
 
 export async function getDividendHistory(symbol: string): Promise<DividendHistoryItem[]> {
   try {
-    const data = await get<{ historical: DividendHistoryItem[] }>(
-      url(BASE_V3, `/historical-price-full/stock_dividend/${symbol}`)
-    );
-    return data?.historical ?? [];
+    const data = await get<unknown>(url("/dividends", { symbol }));
+    return asArray<DividendHistoryItem>(data);
   } catch {
     return [];
   }
@@ -203,8 +277,16 @@ export async function getDividendHistory(symbol: string): Promise<DividendHistor
 
 export async function getRating(symbol: string): Promise<CompanyRating | null> {
   try {
-    const data = await get<CompanyRating[]>(url(BASE_V3, `/rating/${symbol}`));
-    return data?.[0] ?? null;
+    const data = await get<Record<string, unknown>[]>(url("/ratings-snapshot", { symbol }));
+    const raw = asArray<Record<string, unknown>>(data)[0];
+    if (!raw) return null;
+    return {
+      symbol: pick<string>(raw, "symbol") ?? symbol,
+      date: pick<string>(raw, "date") ?? "",
+      rating: pick<string>(raw, "rating") ?? "",
+      ratingScore: pick(raw, "ratingScore", "overallScore") ?? 0,
+      ratingRecommendation: pick<string>(raw, "ratingRecommendation", "ratingDetailsDCFRecommendation") ?? "",
+    };
   } catch {
     return null;
   }
@@ -212,10 +294,8 @@ export async function getRating(symbol: string): Promise<CompanyRating | null> {
 
 export async function getNews(symbol: string, limit = 12): Promise<NewsItem[]> {
   try {
-    return await get<NewsItem[]>(
-      url(BASE_V3, "/stock_news", { tickers: symbol, limit }),
-      120
-    );
+    const data = await get<unknown>(url("/news/stock", { symbols: symbol, limit }), 120);
+    return asArray<NewsItem>(data);
   } catch {
     return [];
   }
@@ -223,10 +303,11 @@ export async function getNews(symbol: string, limit = 12): Promise<NewsItem[]> {
 
 export async function getPeers(symbol: string): Promise<string[]> {
   try {
-    const data = await get<{ symbol: string; peersList: string[] }[]>(
-      url(BASE_V4, "/stock_peers", { symbol })
-    );
-    return data?.[0]?.peersList ?? [];
+    const data = await get<Record<string, unknown>[]>(url("/stock-peers", { symbol }));
+    const arr = asArray<Record<string, unknown>>(data);
+    const first = arr[0];
+    if (first && Array.isArray(first.peersList)) return first.peersList as string[];
+    return arr.map((r) => pick<string>(r, "peerSymbol", "symbol")).filter((s): s is string => !!s && s !== symbol);
   } catch {
     return [];
   }
