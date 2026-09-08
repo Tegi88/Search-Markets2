@@ -17,7 +17,7 @@ function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex flex-col gap-0.5">
       <span className="text-xs text-muted">{label}</span>
-      <span className="text-sm font-medium">{value}</span>
+      <span className="text-sm font-medium ltr-content">{value}</span>
     </div>
   );
 }
@@ -65,8 +65,8 @@ export default function StockHeader({
       </div>
 
       <div className="mt-4 flex flex-wrap items-end gap-4">
-        <div className="text-3xl font-semibold">{formatCurrency(price, currency)}</div>
-        <div className={`text-sm font-medium ${classForChange(change)}`}>
+        <div className="text-3xl font-semibold ltr-content">{formatCurrency(price, currency)}</div>
+        <div className={`text-sm font-medium ltr-content ${classForChange(change)}`}>
           {signPrefix(change)}
           {formatCurrency(change, currency)} ({signPrefix(changePct)}
           {formatPercent(changePct, true)})

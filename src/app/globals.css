@@ -51,6 +51,15 @@ table.data-table td {
   text-align: end;
 }
 
+/* Dates and numbers should stay in LTR reading order even inside an
+   RTL page — otherwise the bidi algorithm scrambles them. */
+table.data-table td:not(:first-child),
+table.data-table th:not(:first-child),
+.ltr-content {
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
 table.data-table th:first-child,
 table.data-table td:first-child {
   text-align: start;
