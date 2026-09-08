@@ -1,7 +1,10 @@
+"use client";
+
 import { formatDate } from "@/lib/format";
+import { useLanguage, type TranslationKey } from "@/lib/i18n";
 
 export interface TableRowConfig<T> {
-  label: string;
+  labelKey: TranslationKey;
   key: keyof T;
   format: (value: number) => string;
   bold?: boolean;
@@ -14,8 +17,10 @@ export default function FinancialTable<T extends { date: string }>({
   rows: TableRowConfig<T>[];
   data: T[];
 }) {
+  const { t } = useLanguage();
+
   if (data.length === 0) {
-    return <div className="p-6 text-sm text-muted">No data available.</div>;
+    return <div className="p-6 text-sm text-muted">{t("noDataAvailable")}</div>;
   }
   const ordered = [...data].reverse();
 
@@ -24,7 +29,7 @@ export default function FinancialTable<T extends { date: string }>({
       <table className="data-table">
         <thead>
           <tr>
-            <th>Metric</th>
+            <th>{t("metric")}</th>
             {ordered.map((d) => (
               <th key={d.date}>{formatDate(d.date)}</th>
             ))}
@@ -33,7 +38,7 @@ export default function FinancialTable<T extends { date: string }>({
         <tbody>
           {rows.map((row) => (
             <tr key={String(row.key)} className={row.bold ? "font-semibold" : ""}>
-              <td>{row.label}</td>
+              <td>{t(row.labelKey)}</td>
               {ordered.map((d) => {
                 const raw = d[row.key];
                 const num = typeof raw === "number" ? raw : NaN;

@@ -1,9 +1,13 @@
+"use client";
+
 import type { FullStockData } from "@/lib/types";
 import { formatDate } from "@/lib/format";
+import { useLanguage } from "@/lib/i18n";
 
 export default function NewsTab({ data }: { data: FullStockData }) {
+  const { t } = useLanguage();
   if (data.news.length === 0) {
-    return <div className="card p-6 text-sm text-muted">No recent news available.</div>;
+    return <div className="card p-6 text-sm text-muted">{t("noNews")}</div>;
   }
 
   return (

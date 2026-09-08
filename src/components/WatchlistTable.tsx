@@ -6,8 +6,10 @@ import { Star, Trash2 } from "lucide-react";
 import { useWatchlist } from "@/lib/useWatchlist";
 import type { Quote } from "@/lib/types";
 import { classForChange, formatCompact, formatCurrency, formatPercent, signPrefix } from "@/lib/format";
+import { useLanguage } from "@/lib/i18n";
 
 export default function WatchlistTable() {
+  const { t } = useLanguage();
   const { symbols, ready, remove } = useWatchlist();
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [loading, setLoading] = useState(true);
@@ -34,9 +36,7 @@ export default function WatchlistTable() {
 
   if (ready && symbols.length === 0) {
     return (
-      <div className="card p-6 text-sm text-muted">
-        Your watchlist is empty. Search for a stock above and add it to your watchlist.
-      </div>
+      <div className="card p-6 text-sm text-muted">{t("watchlistEmpty")}</div>
     );
   }
 
@@ -44,18 +44,18 @@ export default function WatchlistTable() {
     <div className="card overflow-hidden">
       <div className="flex items-center gap-2 border-b px-4 py-3">
         <Star size={16} className="text-accent" />
-        <h2 className="font-medium">Watchlist</h2>
+        <h2 className="font-medium">{t("watchlistTitle")}</h2>
       </div>
       <div className="overflow-x-auto">
         <table className="data-table">
           <thead>
             <tr>
-              <th>Symbol</th>
-              <th>Name</th>
-              <th>Price</th>
-              <th>Change</th>
-              <th>Market Cap</th>
-              <th>P/E</th>
+              <th>{t("symbol")}</th>
+              <th>{t("name")}</th>
+              <th>{t("price")}</th>
+              <th>{t("change")}</th>
+              <th>{t("marketCap")}</th>
+              <th>{t("peRatio")}</th>
               <th></th>
             </tr>
           </thead>
@@ -63,7 +63,7 @@ export default function WatchlistTable() {
             {loading &&
               symbols.map((s) => (
                 <tr key={s}>
-                  <td colSpan={7} className="text-muted">Loading {s}…</td>
+                  <td colSpan={7} className="text-muted">{t("loading")} {s}…</td>
                 </tr>
               ))}
             {!loading &&

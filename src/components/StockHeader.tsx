@@ -1,3 +1,5 @@
+"use client";
+
 import Image from "next/image";
 import type { CompanyProfile, CompanyRating, Quote } from "@/lib/types";
 import {
@@ -8,6 +10,7 @@ import {
   formatPercent,
   signPrefix,
 } from "@/lib/format";
+import { useLanguage } from "@/lib/i18n";
 import WatchlistStarButton from "./WatchlistStarButton";
 
 function Stat({ label, value }: { label: string; value: string }) {
@@ -28,6 +31,7 @@ export default function StockHeader({
   quote: Quote | null;
   rating: CompanyRating | null;
 }) {
+  const { t } = useLanguage();
   const currency = profile.currency || "USD";
   const price = quote?.price ?? profile.price;
   const change = quote?.change ?? profile.changes;
@@ -69,30 +73,30 @@ export default function StockHeader({
         </div>
         {rating && (
           <span className="rounded-full border px-2.5 py-1 text-xs">
-            Rating: <span className="font-semibold">{rating.rating}</span> — {rating.ratingRecommendation}
+            {t("rating")}: <span className="font-semibold">{rating.rating}</span> — {rating.ratingRecommendation}
           </span>
         )}
       </div>
 
       <div className="mt-5 grid grid-cols-2 gap-4 border-t pt-4 sm:grid-cols-3 md:grid-cols-6">
-        <Stat label="Open" value={formatCurrency(quote?.open, currency)} />
-        <Stat label="Prev Close" value={formatCurrency(quote?.previousClose, currency)} />
+        <Stat label={t("open")} value={formatCurrency(quote?.open, currency)} />
+        <Stat label={t("prevClose")} value={formatCurrency(quote?.previousClose, currency)} />
         <Stat
-          label="Day Range"
+          label={t("dayRange")}
           value={quote ? `${formatCurrency(quote.dayLow, currency)} – ${formatCurrency(quote.dayHigh, currency)}` : "—"}
         />
         <Stat
-          label="52W Range"
+          label={t("yearRange")}
           value={quote ? `${formatCurrency(quote.yearLow, currency)} – ${formatCurrency(quote.yearHigh, currency)}` : "—"}
         />
-        <Stat label="Volume" value={formatCompact(quote?.volume)} />
-        <Stat label="Avg Volume" value={formatCompact(quote?.avgVolume)} />
-        <Stat label="Market Cap" value={formatCompact(quote?.marketCap ?? profile.mktCap)} />
-        <Stat label="P/E (TTM)" value={quote?.pe ? quote.pe.toFixed(2) : "—"} />
-        <Stat label="EPS (TTM)" value={quote?.eps ? quote.eps.toFixed(2) : "—"} />
-        <Stat label="Beta" value={profile.beta ? profile.beta.toFixed(2) : "—"} />
-        <Stat label="Employees" value={profile.fullTimeEmployees || "—"} />
-        <Stat label="IPO Date" value={formatDate(profile.ipoDate)} />
+        <Stat label={t("volume")} value={formatCompact(quote?.volume)} />
+        <Stat label={t("avgVolume")} value={formatCompact(quote?.avgVolume)} />
+        <Stat label={t("marketCap")} value={formatCompact(quote?.marketCap ?? profile.mktCap)} />
+        <Stat label={t("peRatioTTM")} value={quote?.pe ? quote.pe.toFixed(2) : "—"} />
+        <Stat label={t("epsTTM")} value={quote?.eps ? quote.eps.toFixed(2) : "—"} />
+        <Stat label={t("beta")} value={profile.beta ? profile.beta.toFixed(2) : "—"} />
+        <Stat label={t("employees")} value={profile.fullTimeEmployees || "—"} />
+        <Stat label={t("ipoDate")} value={formatDate(profile.ipoDate)} />
       </div>
     </div>
   );

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Search, X } from "lucide-react";
 import type { SearchResult } from "@/lib/types";
+import { useLanguage } from "@/lib/i18n";
 
 export default function SearchBar({ compact = false }: { compact?: boolean }) {
   const [query, setQuery] = useState("");
@@ -12,6 +13,7 @@ export default function SearchBar({ compact = false }: { compact?: boolean }) {
   const [loading, setLoading] = useState(false);
   const boxRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
+  const { t } = useLanguage();
 
   useEffect(() => {
     function onClick(e: MouseEvent) {
@@ -65,7 +67,7 @@ export default function SearchBar({ compact = false }: { compact?: boolean }) {
               else go(query.trim());
             }
           }}
-          placeholder="Search ticker or company (e.g. AAPL, Tesla, MSFT)"
+          placeholder={t("searchPlaceholder")}
           className="w-full bg-transparent text-sm outline-none placeholder:text-muted"
         />
         {query && (
@@ -76,7 +78,7 @@ export default function SearchBar({ compact = false }: { compact?: boolean }) {
       </div>
       {open && (loading || results.length > 0) && (
         <div className={`absolute left-0 right-0 mt-1 max-h-80 overflow-auto rounded-lg border bg-panel shadow-lg z-40 ${compact ? "" : ""}`}>
-          {loading && <div className="px-3 py-2 text-xs text-muted">Searching…</div>}
+          {loading && <div className="px-3 py-2 text-xs text-muted">{t("searching")}</div>}
           {!loading &&
             results.map((r) => (
               <button

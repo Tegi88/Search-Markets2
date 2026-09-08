@@ -6,8 +6,10 @@ import type { FullStockData, Quote } from "@/lib/types";
 import FinancialTable from "@/components/FinancialTable";
 import { keyMetricsRows, ratioRows } from "@/lib/tableRows";
 import { formatCompact, formatCurrency } from "@/lib/format";
+import { useLanguage } from "@/lib/i18n";
 
 function PeerComparison({ symbol, peers }: { symbol: string; peers: string[] }) {
+  const { t } = useLanguage();
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -25,25 +27,25 @@ function PeerComparison({ symbol, peers }: { symbol: string; peers: string[] }) 
   return (
     <div className="card overflow-hidden">
       <div className="border-b p-4">
-        <h3 className="font-medium">Peer Comparison</h3>
+        <h3 className="font-medium">{t("peerComparison")}</h3>
       </div>
       <div className="overflow-x-auto">
         <table className="data-table">
           <thead>
             <tr>
-              <th>Symbol</th>
-              <th>Price</th>
-              <th>Market Cap</th>
-              <th>P/E</th>
-              <th>EPS</th>
-              <th>52W High</th>
-              <th>52W Low</th>
+              <th>{t("symbol")}</th>
+              <th>{t("price")}</th>
+              <th>{t("marketCap")}</th>
+              <th>{t("peRatio")}</th>
+              <th>{t("eps")}</th>
+              <th>{t("yearHigh")}</th>
+              <th>{t("yearLow")}</th>
             </tr>
           </thead>
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={7} className="text-muted">Loading…</td>
+                <td colSpan={7} className="text-muted">{t("loading")}</td>
               </tr>
             )}
             {!loading &&
@@ -70,17 +72,18 @@ function PeerComparison({ symbol, peers }: { symbol: string; peers: string[] }) 
 }
 
 export default function ValuationTab({ data }: { data: FullStockData }) {
+  const { t } = useLanguage();
   return (
     <div className="flex flex-col gap-4">
       <div className="card">
         <div className="border-b p-4">
-          <h3 className="font-medium">Valuation & Profitability Ratios</h3>
+          <h3 className="font-medium">{t("valuationProfitability")}</h3>
         </div>
         <FinancialTable rows={ratioRows} data={data.ratios} />
       </div>
       <div className="card">
         <div className="border-b p-4">
-          <h3 className="font-medium">Key Metrics</h3>
+          <h3 className="font-medium">{t("keyMetrics")}</h3>
         </div>
         <FinancialTable rows={keyMetricsRows} data={data.keyMetrics} />
       </div>

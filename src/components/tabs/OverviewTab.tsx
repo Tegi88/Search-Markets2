@@ -1,9 +1,13 @@
+"use client";
+
 import Link from "next/link";
 import type { FullStockData } from "@/lib/types";
 import PriceChart from "@/components/PriceChart";
 import { formatCompact, formatPercent, formatRatio } from "@/lib/format";
+import { useLanguage } from "@/lib/i18n";
 
 export default function OverviewTab({ data }: { data: FullStockData }) {
+  const { t } = useLanguage();
   const { profile, ratios, keyMetrics, peers } = data;
   const latestRatio = ratios[0];
   const latestMetrics = keyMetrics[0];
@@ -14,7 +18,7 @@ export default function OverviewTab({ data }: { data: FullStockData }) {
         <PriceChart symbol={data.symbol} currency={profile?.currency} />
         {profile?.description && (
           <div className="card p-5">
-            <h3 className="mb-2 font-medium">About {profile.companyName}</h3>
+            <h3 className="mb-2 font-medium">{t("about")} {profile.companyName}</h3>
             <p className="text-sm leading-relaxed text-muted">{profile.description}</p>
             {profile.website && (
               <a
@@ -32,36 +36,36 @@ export default function OverviewTab({ data }: { data: FullStockData }) {
 
       <div className="flex flex-col gap-4">
         <div className="card p-5">
-          <h3 className="mb-3 font-medium">Key Statistics</h3>
+          <h3 className="mb-3 font-medium">{t("keyStatistics")}</h3>
           <dl className="grid grid-cols-2 gap-y-3 text-sm">
-            <dt className="text-muted">P/E Ratio</dt>
+            <dt className="text-muted">{t("peRatio")}</dt>
             <dd className="text-right">{formatRatio(latestRatio?.priceEarningsRatio)}</dd>
-            <dt className="text-muted">P/B Ratio</dt>
+            <dt className="text-muted">{t("pbRatio")}</dt>
             <dd className="text-right">{formatRatio(latestRatio?.priceToBookRatio)}</dd>
-            <dt className="text-muted">P/S Ratio</dt>
+            <dt className="text-muted">{t("psRatio")}</dt>
             <dd className="text-right">{formatRatio(latestRatio?.priceToSalesRatio)}</dd>
-            <dt className="text-muted">EV/EBITDA</dt>
+            <dt className="text-muted">{t("evEbitda")}</dt>
             <dd className="text-right">{formatRatio(latestMetrics?.evToEbitda)}</dd>
-            <dt className="text-muted">ROE</dt>
+            <dt className="text-muted">{t("roe")}</dt>
             <dd className="text-right">{formatPercent(latestRatio?.returnOnEquity)}</dd>
-            <dt className="text-muted">ROA</dt>
+            <dt className="text-muted">{t("roa")}</dt>
             <dd className="text-right">{formatPercent(latestRatio?.returnOnAssets)}</dd>
-            <dt className="text-muted">Gross Margin</dt>
+            <dt className="text-muted">{t("grossMargin")}</dt>
             <dd className="text-right">{formatPercent(latestRatio?.grossProfitMargin)}</dd>
-            <dt className="text-muted">Net Margin</dt>
+            <dt className="text-muted">{t("netMargin")}</dt>
             <dd className="text-right">{formatPercent(latestRatio?.netProfitMargin)}</dd>
-            <dt className="text-muted">Debt / Equity</dt>
+            <dt className="text-muted">{t("debtEquity")}</dt>
             <dd className="text-right">{formatRatio(latestRatio?.debtEquityRatio)}</dd>
-            <dt className="text-muted">Dividend Yield</dt>
+            <dt className="text-muted">{t("dividendYield")}</dt>
             <dd className="text-right">{formatPercent(latestRatio?.dividendYield)}</dd>
-            <dt className="text-muted">Enterprise Value</dt>
+            <dt className="text-muted">{t("enterpriseValue")}</dt>
             <dd className="text-right">{formatCompact(latestMetrics?.enterpriseValue)}</dd>
           </dl>
         </div>
 
         {peers.length > 0 && (
           <div className="card p-5">
-            <h3 className="mb-3 font-medium">Peer Companies</h3>
+            <h3 className="mb-3 font-medium">{t("peerCompanies")}</h3>
             <div className="flex flex-wrap gap-2">
               {peers.slice(0, 10).map((p) => (
                 <Link

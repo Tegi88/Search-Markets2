@@ -2,8 +2,10 @@
 
 import { Star } from "lucide-react";
 import { useWatchlist } from "@/lib/useWatchlist";
+import { useLanguage } from "@/lib/i18n";
 
 export default function WatchlistStarButton({ symbol }: { symbol: string }) {
+  const { t } = useLanguage();
   const { has, toggle, ready } = useWatchlist();
   const active = ready && has(symbol);
 
@@ -15,7 +17,7 @@ export default function WatchlistStarButton({ symbol }: { symbol: string }) {
       }`}
     >
       <Star size={14} fill={active ? "currentColor" : "none"} />
-      {active ? "In Watchlist" : "Add to Watchlist"}
+      {active ? t("inWatchlist") : t("addToWatchlist")}
     </button>
   );
 }

@@ -5,8 +5,10 @@ import Link from "next/link";
 import { Plus, X } from "lucide-react";
 import type { Quote } from "@/lib/types";
 import { formatCompact, formatCurrency } from "@/lib/format";
+import { useLanguage } from "@/lib/i18n";
 
 export default function ComparePage() {
+  const { t } = useLanguage();
   const [symbols, setSymbols] = useState<string[]>(["AAPL", "MSFT", "GOOGL"]);
   const [input, setInput] = useState("");
   const [quotes, setQuotes] = useState<Quote[]>([]);
@@ -49,7 +51,7 @@ export default function ComparePage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="text-2xl font-semibold">Compare Stocks</h1>
+      <h1 className="text-2xl font-semibold">{t("comparePageTitle")}</h1>
       <div className="flex flex-wrap items-center gap-2">
         {symbols.map((s) => (
           <span key={s} className="flex items-center gap-1 rounded-full border bg-panel px-3 py-1 text-sm">
@@ -64,7 +66,7 @@ export default function ComparePage() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && addSymbol()}
-            placeholder="Add ticker"
+            placeholder={t("addTicker")}
             className="w-24 bg-transparent text-sm outline-none"
           />
           <button onClick={addSymbol} className="text-muted hover:text-accent">
@@ -78,27 +80,27 @@ export default function ComparePage() {
           <table className="data-table">
             <thead>
               <tr>
-                <th>Symbol</th>
-                <th>Name</th>
-                <th>Price</th>
-                <th>Change %</th>
-                <th>Market Cap</th>
-                <th>P/E</th>
-                <th>EPS</th>
-                <th>52W High</th>
-                <th>52W Low</th>
-                <th>Avg Volume</th>
+                <th>{t("symbol")}</th>
+                <th>{t("name")}</th>
+                <th>{t("price")}</th>
+                <th>{t("changePct")}</th>
+                <th>{t("marketCap")}</th>
+                <th>{t("peRatio")}</th>
+                <th>{t("eps")}</th>
+                <th>{t("yearHigh")}</th>
+                <th>{t("yearLow")}</th>
+                <th>{t("avgVolume")}</th>
               </tr>
             </thead>
             <tbody>
               {loading && (
                 <tr>
-                  <td colSpan={10} className="text-muted">Loading…</td>
+                  <td colSpan={10} className="text-muted">{t("loading")}</td>
                 </tr>
               )}
               {!loading && quotes.length === 0 && (
                 <tr>
-                  <td colSpan={10} className="text-muted">Add tickers above to compare.</td>
+                  <td colSpan={10} className="text-muted">{t("addToCompare")}</td>
                 </tr>
               )}
               {!loading &&

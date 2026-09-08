@@ -48,15 +48,26 @@ table.data-table th,
 table.data-table td {
   padding: 0.5rem 0.75rem;
   border-bottom: 1px solid var(--border);
-  text-align: right;
+  text-align: end;
 }
 
 table.data-table th:first-child,
 table.data-table td:first-child {
-  text-align: left;
+  text-align: start;
   position: sticky;
-  left: 0;
+  inset-inline-start: 0;
   background: var(--panel);
+}
+
+.text-left {
+  text-align: start !important;
+}
+.text-right {
+  text-align: end !important;
+}
+.ml-2 {
+  margin-inline-start: 0.5rem !important;
+  margin-inline-end: 0 !important;
 }
 
 table.data-table thead th {

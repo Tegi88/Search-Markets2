@@ -1,7 +1,11 @@
+"use client";
+
 import type { FullStockData } from "@/lib/types";
 import { formatCompact, formatCurrency, formatDate } from "@/lib/format";
+import { useLanguage } from "@/lib/i18n";
 
 export default function AnalystTab({ data }: { data: FullStockData }) {
+  const { t } = useLanguage();
   const { priceTarget, estimates, upgradesDowngrades, rating, quote, profile } = data;
   const currency = profile?.currency ?? "USD";
 
@@ -9,64 +13,64 @@ export default function AnalystTab({ data }: { data: FullStockData }) {
     <div className="flex flex-col gap-4">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="card p-5">
-          <h3 className="mb-3 font-medium">Price Target</h3>
+          <h3 className="mb-3 font-medium">{t("priceTarget")}</h3>
           {priceTarget ? (
             <dl className="grid grid-cols-2 gap-y-2 text-sm">
-              <dt className="text-muted">Current Price</dt>
+              <dt className="text-muted">{t("currentPrice")}</dt>
               <dd className="text-right">{formatCurrency(quote?.price, currency)}</dd>
-              <dt className="text-muted">Avg Target (Last Quarter)</dt>
+              <dt className="text-muted">{t("avgTargetQuarter")}</dt>
               <dd className="text-right">{formatCurrency(priceTarget.lastQuarterAvgPriceTarget, currency)}</dd>
-              <dt className="text-muted">Avg Target (Last Year)</dt>
+              <dt className="text-muted">{t("avgTargetYear")}</dt>
               <dd className="text-right">{formatCurrency(priceTarget.lastYearAvgPriceTarget, currency)}</dd>
-              <dt className="text-muted">Analysts (Last Quarter)</dt>
+              <dt className="text-muted">{t("analystsLastQuarter")}</dt>
               <dd className="text-right">{priceTarget.lastQuarterCount ?? "—"}</dd>
             </dl>
           ) : (
-            <p className="text-sm text-muted">No analyst price target data available.</p>
+            <p className="text-sm text-muted">{t("noPriceTargetData")}</p>
           )}
         </div>
 
         <div className="card p-5">
-          <h3 className="mb-3 font-medium">Analyst Rating</h3>
+          <h3 className="mb-3 font-medium">{t("analystRating")}</h3>
           {rating ? (
             <dl className="grid grid-cols-2 gap-y-2 text-sm">
-              <dt className="text-muted">Overall Rating</dt>
+              <dt className="text-muted">{t("overallRating")}</dt>
               <dd className="text-right font-semibold">{rating.rating}</dd>
-              <dt className="text-muted">Recommendation</dt>
+              <dt className="text-muted">{t("recommendation")}</dt>
               <dd className="text-right">{rating.ratingRecommendation}</dd>
-              <dt className="text-muted">Score</dt>
+              <dt className="text-muted">{t("score")}</dt>
               <dd className="text-right">{rating.ratingScore}/5</dd>
-              <dt className="text-muted">As of</dt>
+              <dt className="text-muted">{t("asOf")}</dt>
               <dd className="text-right">{formatDate(rating.date)}</dd>
             </dl>
           ) : (
-            <p className="text-sm text-muted">No rating data available.</p>
+            <p className="text-sm text-muted">{t("noRatingData")}</p>
           )}
         </div>
       </div>
 
       <div className="card overflow-hidden">
         <div className="border-b p-4">
-          <h3 className="font-medium">Analyst Estimates</h3>
+          <h3 className="font-medium">{t("analystEstimates")}</h3>
         </div>
         <div className="overflow-x-auto">
           <table className="data-table">
             <thead>
               <tr>
-                <th>Period</th>
-                <th>Est. Revenue (Low)</th>
-                <th>Est. Revenue (Avg)</th>
-                <th>Est. Revenue (High)</th>
-                <th>Est. EPS (Low)</th>
-                <th>Est. EPS (Avg)</th>
-                <th>Est. EPS (High)</th>
-                <th># Analysts</th>
+                <th>{t("period")}</th>
+                <th>{t("estRevenueLow")}</th>
+                <th>{t("estRevenueAvg")}</th>
+                <th>{t("estRevenueHigh")}</th>
+                <th>{t("estEpsLow")}</th>
+                <th>{t("estEpsAvg")}</th>
+                <th>{t("estEpsHigh")}</th>
+                <th>{t("numAnalysts")}</th>
               </tr>
             </thead>
             <tbody>
               {estimates.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="text-muted">No estimate data available.</td>
+                  <td colSpan={8} className="text-muted">{t("noEstimateData")}</td>
                 </tr>
               )}
               {estimates.map((e) => (
@@ -88,23 +92,23 @@ export default function AnalystTab({ data }: { data: FullStockData }) {
 
       <div className="card overflow-hidden">
         <div className="border-b p-4">
-          <h3 className="font-medium">Recent Upgrades / Downgrades</h3>
+          <h3 className="font-medium">{t("upgradesDowngrades")}</h3>
         </div>
         <div className="overflow-x-auto">
           <table className="data-table">
             <thead>
               <tr>
-                <th>Firm</th>
-                <th>Action</th>
-                <th>New Grade</th>
-                <th>Previous Grade</th>
-                <th>Date</th>
+                <th>{t("firm")}</th>
+                <th>{t("action")}</th>
+                <th>{t("newGrade")}</th>
+                <th>{t("previousGrade")}</th>
+                <th>{t("date")}</th>
               </tr>
             </thead>
             <tbody>
               {upgradesDowngrades.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="text-muted">No recent analyst actions.</td>
+                  <td colSpan={5} className="text-muted">{t("noAnalystActions")}</td>
                 </tr>
               )}
               {upgradesDowngrades.slice(0, 15).map((u, i) => (

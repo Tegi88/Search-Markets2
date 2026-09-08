@@ -14,19 +14,20 @@ import DividendsTab from "@/components/tabs/DividendsTab";
 import OwnershipTab from "@/components/tabs/OwnershipTab";
 import AnalystTab from "@/components/tabs/AnalystTab";
 import NewsTab from "@/components/tabs/NewsTab";
-
-const TABS: TabDef[] = [
-  { id: "overview", label: "Overview" },
-  { id: "financials", label: "Financials" },
-  { id: "valuation", label: "Valuation" },
-  { id: "growth", label: "Growth & Profitability" },
-  { id: "dividends", label: "Dividends" },
-  { id: "ownership", label: "Ownership & Insiders" },
-  { id: "analyst", label: "Analyst Estimates" },
-  { id: "news", label: "News" },
-];
+import { useLanguage } from "@/lib/i18n";
 
 export default function StockPage() {
+  const { t } = useLanguage();
+  const TABS: TabDef[] = [
+    { id: "overview", label: t("tabOverview") },
+    { id: "financials", label: t("tabFinancials") },
+    { id: "valuation", label: t("tabValuation") },
+    { id: "growth", label: t("tabGrowth") },
+    { id: "dividends", label: t("tabDividends") },
+    { id: "ownership", label: t("tabOwnership") },
+    { id: "analyst", label: t("tabAnalyst") },
+    { id: "news", label: t("tabNews") },
+  ];
   const params = useParams<{ ticker: string }>();
   const ticker = (params?.ticker ?? "").toString().toUpperCase();
   const [data, setData] = useState<FullStockData | null>(null);
@@ -63,7 +64,7 @@ export default function StockPage() {
     return (
       <div className="flex h-64 flex-col items-center justify-center gap-3 text-muted">
         <Loader2 className="animate-spin" />
-        <span>Loading {ticker}…</span>
+        <span>{t("loading")} {ticker}…</span>
       </div>
     );
   }
@@ -73,12 +74,12 @@ export default function StockPage() {
     return (
       <div className="card mx-auto mt-8 flex max-w-lg flex-col items-center gap-3 p-8 text-center">
         <AlertTriangle className="text-down" size={28} />
-        <h2 className="font-medium">Couldn&apos;t load {ticker}</h2>
-        <p className="text-sm text-muted">{error ?? "No data returned for this symbol."}</p>
+        <h2 className="font-medium">{t("couldntLoad")} {ticker}</h2>
+        <p className="text-sm text-muted">{error ?? t("noDataReturned")}</p>
         {isKeyError && (
           <p className="text-sm text-muted">
-            Add a free API key to <code className="rounded bg-bg px-1">.env.local</code> as{" "}
-            <code className="rounded bg-bg px-1">FMP_API_KEY</code>. Get one at{" "}
+            {t("addApiKeyNote1")} <code className="rounded bg-bg px-1">.env.local</code> {t("addApiKeyNote2")}{" "}
+            <code className="rounded bg-bg px-1">FMP_API_KEY</code>. {t("getOneAt")}{" "}
             <a
               className="text-accent hover:underline"
               href="https://site.financialmodelingprep.com/developer/docs/pricing"

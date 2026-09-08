@@ -11,10 +11,12 @@ import {
 } from "recharts";
 import type { HistoricalPrice } from "@/lib/types";
 import { formatCurrency, formatDate } from "@/lib/format";
+import { useLanguage } from "@/lib/i18n";
 
 const RANGES = ["1M", "6M", "1Y", "5Y", "MAX"] as const;
 
 export default function PriceChart({ symbol, currency = "USD" }: { symbol: string; currency?: string }) {
+  const { t } = useLanguage();
   const [range, setRange] = useState<(typeof RANGES)[number]>("1Y");
   const [prices, setPrices] = useState<HistoricalPrice[]>([]);
   const [loading, setLoading] = useState(true);
@@ -39,7 +41,7 @@ export default function PriceChart({ symbol, currency = "USD" }: { symbol: strin
   return (
     <div className="card p-4">
       <div className="mb-3 flex items-center justify-between">
-        <h3 className="font-medium">Price History</h3>
+        <h3 className="font-medium">{t("priceHistory")}</h3>
         <div className="flex gap-1">
           {RANGES.map((r) => (
             <button
@@ -56,9 +58,9 @@ export default function PriceChart({ symbol, currency = "USD" }: { symbol: strin
       </div>
       <div className="h-72 w-full">
         {loading ? (
-          <div className="flex h-full items-center justify-center text-sm text-muted">Loading chart…</div>
+          <div className="flex h-full items-center justify-center text-sm text-muted">{t("loadingChart")}</div>
         ) : prices.length === 0 ? (
-          <div className="flex h-full items-center justify-center text-sm text-muted">No price data available.</div>
+          <div className="flex h-full items-center justify-center text-sm text-muted">{t("noPriceData")}</div>
         ) : (
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={prices} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
