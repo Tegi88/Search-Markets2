@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { AlertTriangle, Loader2 } from "lucide-react";
-import type { FullStockData } from "@/lib/types";
+import type { CoreStockData } from "@/lib/types";
 import StockHeader from "@/components/StockHeader";
 import Tabs, { TabDef } from "@/components/Tabs";
 import OverviewTab from "@/components/tabs/OverviewTab";
@@ -30,7 +30,7 @@ export default function StockPage() {
   ];
   const params = useParams<{ ticker: string }>();
   const ticker = (params?.ticker ?? "").toString().toUpperCase();
-  const [data, setData] = useState<FullStockData | null>(null);
+  const [data, setData] = useState<CoreStockData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState("overview");
@@ -46,7 +46,7 @@ export default function StockPage() {
       .then(async (r) => {
         const json = await r.json();
         if (!r.ok) throw new Error(json.error ?? "Failed to load data");
-        return json as FullStockData;
+        return json as CoreStockData;
       })
       .then((json) => {
         if (!cancelled) setData(json);
@@ -95,19 +95,30 @@ export default function StockPage() {
     );
   }
 
+  const currency = data.profile.currency || "USD";
+
   return (
     <div className="flex flex-col gap-4">
       <StockHeader profile={data.profile} quote={data.quote} rating={data.rating} />
       <Tabs tabs={TABS} active={tab} onChange={setTab} />
       <div>
         {tab === "overview" && <OverviewTab data={data} />}
-        {tab === "financials" && <FinancialsTab data={data} />}
+        {tab === "financials" && <FinancialsTab symbol={ticker} />}
         {tab === "valuation" && <ValuationTab data={data} />}
-        {tab === "growth" && <GrowthTab data={data} />}
-        {tab === "dividends" && <DividendsTab data={data} />}
-        {tab === "ownership" && <OwnershipTab data={data} />}
-        {tab === "analyst" && <AnalystTab data={data} />}
-        {tab === "news" && <NewsTab data={data} />}
+        {tab === "growth" && <GrowthTab symbol={ticker} />}
+        {tab === "dividends" && (
+          <DividendsTab
+            symbol={ticker}
+            companyName={data.profile.companyName}
+            currency={currency}
+            latestRatio={data.ratios[0]}
+          />
+        )}
+        {tab === "ownership" && <OwnershipTab symbol={ticker} currency={currency} />}
+        {tab === "analyst" && (
+          <AnalystTab symbol={ticker} currency={currency} price={data.quote?.price} rating={data.rating} />
+        )}
+        {tab === "news" && <NewsTab symbol={ticker} />}
       </div>
     </div>
   );

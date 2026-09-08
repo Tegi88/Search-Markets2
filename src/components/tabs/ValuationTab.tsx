@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import type { FullStockData, Quote } from "@/lib/types";
+import type { CoreStockData, Quote } from "@/lib/types";
 import FinancialTable from "@/components/FinancialTable";
 import { keyMetricsRows, ratioRows } from "@/lib/tableRows";
 import { formatCompact, formatCurrency } from "@/lib/format";
@@ -71,7 +71,7 @@ function PeerComparison({ symbol, peers }: { symbol: string; peers: string[] }) 
   );
 }
 
-export default function ValuationTab({ data }: { data: FullStockData }) {
+export default function ValuationTab({ data }: { data: CoreStockData }) {
   const { t } = useLanguage();
   return (
     <div className="flex flex-col gap-4">

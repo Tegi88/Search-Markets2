@@ -10,14 +10,22 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import type { FullStockData } from "@/lib/types";
+import type { GrowthSection } from "@/lib/types";
+import { useSection } from "@/lib/useSection";
 import FinancialTable from "@/components/FinancialTable";
+import { SectionError, SectionLoading } from "@/components/SectionState";
 import { growthRows } from "@/lib/tableRows";
 import { formatDate, formatPercent } from "@/lib/format";
 import { useLanguage } from "@/lib/i18n";
 
-export default function GrowthTab({ data }: { data: FullStockData }) {
+export default function GrowthTab({ symbol }: { symbol: string }) {
   const { t } = useLanguage();
+  const { data, loading, error } = useSection<GrowthSection>(symbol, "growth");
+
+  if (loading) return <SectionLoading />;
+  if (error) return <SectionError message={error} />;
+  if (!data) return null;
+
   const revenueLabel = t("revenue");
   const netIncomeLabel = t("netIncome");
   const chartData = [...data.growth]

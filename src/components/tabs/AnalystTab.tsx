@@ -1,13 +1,30 @@
 "use client";
 
-import type { FullStockData } from "@/lib/types";
+import type { AnalystSection, CompanyRating } from "@/lib/types";
+import { useSection } from "@/lib/useSection";
+import { SectionError, SectionLoading } from "@/components/SectionState";
 import { formatCompact, formatCurrency, formatDate } from "@/lib/format";
 import { useLanguage } from "@/lib/i18n";
 
-export default function AnalystTab({ data }: { data: FullStockData }) {
+export default function AnalystTab({
+  symbol,
+  currency,
+  price,
+  rating,
+}: {
+  symbol: string;
+  currency: string;
+  price?: number;
+  rating: CompanyRating | null;
+}) {
   const { t } = useLanguage();
-  const { priceTarget, estimates, upgradesDowngrades, rating, quote, profile } = data;
-  const currency = profile?.currency ?? "USD";
+  const { data, loading, error } = useSection<AnalystSection>(symbol, "analyst");
+
+  if (loading) return <SectionLoading />;
+  if (error) return <SectionError message={error} />;
+  if (!data) return null;
+
+  const { priceTarget, estimates, upgradesDowngrades } = data;
 
   return (
     <div className="flex flex-col gap-4">
@@ -17,7 +34,7 @@ export default function AnalystTab({ data }: { data: FullStockData }) {
           {priceTarget ? (
             <dl className="grid grid-cols-2 gap-y-2 text-sm">
               <dt className="text-muted">{t("currentPrice")}</dt>
-              <dd className="text-right">{formatCurrency(quote?.price, currency)}</dd>
+              <dd className="text-right">{formatCurrency(price, currency)}</dd>
               <dt className="text-muted">{t("avgTargetQuarter")}</dt>
               <dd className="text-right">{formatCurrency(priceTarget.lastQuarterAvgPriceTarget, currency)}</dd>
               <dt className="text-muted">{t("avgTargetYear")}</dt>

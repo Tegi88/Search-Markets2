@@ -1,12 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import type { FullStockData } from "@/lib/types";
+import type { CoreStockData } from "@/lib/types";
 import PriceChart from "@/components/PriceChart";
 import { formatCompact, formatPercent, formatRatio } from "@/lib/format";
 import { useLanguage } from "@/lib/i18n";
 
-export default function OverviewTab({ data }: { data: FullStockData }) {
+export default function OverviewTab({ data }: { data: CoreStockData }) {
   const { t } = useLanguage();
   const { profile, ratios, keyMetrics, peers } = data;
   const latestRatio = ratios[0];

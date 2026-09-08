@@ -1,19 +1,35 @@
 "use client";
 
-import type { FullStockData } from "@/lib/types";
+import type { DividendsSection, Ratio } from "@/lib/types";
+import { useSection } from "@/lib/useSection";
+import { SectionError, SectionLoading } from "@/components/SectionState";
 import { formatCurrency, formatDate, formatPercent } from "@/lib/format";
 import { useLanguage } from "@/lib/i18n";
 
-export default function DividendsTab({ data }: { data: FullStockData }) {
+export default function DividendsTab({
+  symbol,
+  companyName,
+  currency,
+  latestRatio,
+}: {
+  symbol: string;
+  companyName: string;
+  currency: string;
+  latestRatio?: Ratio;
+}) {
   const { t } = useLanguage();
-  const latestRatio = data.ratios[0];
+  const { data, loading, error } = useSection<DividendsSection>(symbol, "dividends");
+
+  if (loading) return <SectionLoading />;
+  if (error) return <SectionError message={error} />;
+  if (!data) return null;
+
   const dividends = data.dividends.slice(0, 20);
-  const currency = data.profile?.currency ?? "USD";
 
   if (dividends.length === 0) {
     return (
       <div className="card p-6 text-sm text-muted">
-        {data.profile?.companyName ?? data.symbol} {t("noDividend")}
+        {companyName || symbol} {t("noDividend")}
       </div>
     );
   }

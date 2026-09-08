@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getFullStockData } from "@/lib/fmp";
+import { getCoreStockData } from "@/lib/fmp";
 
 export async function GET(
   _req: NextRequest,
@@ -7,7 +7,7 @@ export async function GET(
 ) {
   const { ticker } = await params;
   try {
-    const data = await getFullStockData(ticker);
+    const data = await getCoreStockData(ticker);
     if (!data.profile && !data.quote) {
       return NextResponse.json(
         { error: `No data found for "${ticker}". Check the ticker symbol.` },

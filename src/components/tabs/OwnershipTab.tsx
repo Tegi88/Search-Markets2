@@ -1,14 +1,21 @@
 "use client";
 
-import type { FullStockData } from "@/lib/types";
+import type { OwnershipSection } from "@/lib/types";
+import { useSection } from "@/lib/useSection";
+import { SectionError, SectionLoading } from "@/components/SectionState";
 import { formatCompact, formatCurrency, formatDate } from "@/lib/format";
 import { useLanguage } from "@/lib/i18n";
 
-export default function OwnershipTab({ data }: { data: FullStockData }) {
+export default function OwnershipTab({ symbol, currency }: { symbol: string; currency: string }) {
   const { t } = useLanguage();
+  const { data, loading, error } = useSection<OwnershipSection>(symbol, "ownership");
+
+  if (loading) return <SectionLoading />;
+  if (error) return <SectionError message={error} />;
+  if (!data) return null;
+
   const holders = data.institutionalHolders.slice(0, 15);
   const insiders = data.insiderTrades.slice(0, 20);
-  const currency = data.profile?.currency ?? "USD";
 
   return (
     <div className="flex flex-col gap-4">

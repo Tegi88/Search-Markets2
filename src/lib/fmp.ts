@@ -1,22 +1,29 @@
 import type {
   AnalystEstimate,
+  AnalystSection,
   BalanceSheetStatement,
   CashFlowStatement,
   CompanyProfile,
   CompanyRating,
+  CoreStockData,
   DividendHistoryItem,
+  DividendsSection,
   FinancialGrowth,
-  FullStockData,
+  FinancialsSection,
+  GrowthSection,
   HistoricalPrice,
   IncomeStatement,
   InsiderTrade,
   InstitutionalHolder,
   KeyMetrics,
   NewsItem,
+  NewsSection,
+  OwnershipSection,
   PriceTargetSummary,
   Quote,
   Ratio,
   SearchResult,
+  SectionName,
   UpgradeDowngrade,
 } from "./types";
 
@@ -345,28 +352,22 @@ async function runLimited(
   return results;
 }
 
-export async function getFullStockData(symbol: string): Promise<FullStockData> {
+/**
+ * The data every stock page needs immediately: header + overview +
+ * valuation. Kept small on purpose — FMP's free plan caps requests at
+ * 250/day, and each additional section below is only fetched the first
+ * time its tab is actually opened.
+ */
+export async function getCoreStockData(symbol: string): Promise<CoreStockData> {
   const sym = symbol.toUpperCase();
 
   const results = await runLimited(
     [
       () => getProfile(sym),
       () => getQuote(sym),
-      () => getIncomeStatement(sym, "annual"),
-      () => getIncomeStatement(sym, "quarter", 8),
-      () => getBalanceSheet(sym, "annual"),
-      () => getCashFlow(sym, "annual"),
       () => getRatios(sym, "annual"),
       () => getKeyMetrics(sym, "annual"),
-      () => getFinancialGrowth(sym, "annual"),
-      () => getAnalystEstimates(sym),
-      () => getPriceTargetSummary(sym),
-      () => getUpgradesDowngrades(sym),
-      () => getInstitutionalHolders(sym),
-      () => getInsiderTrades(sym),
-      () => getDividendHistory(sym),
       () => getRating(sym),
-      () => getNews(sym),
       () => getPeers(sym),
     ],
     3
@@ -376,34 +377,100 @@ export async function getFullStockData(symbol: string): Promise<FullStockData> {
     results[i].status === "fulfilled" ? ((results[i] as PromiseFulfilledResult<T>).value ?? fallback) : fallback;
 
   const quote = value<Quote | null>(1, null);
-  const income = value<IncomeStatement[]>(2, []);
+  const ratios = value<Ratio[]>(2, []);
 
   // The free-plan quote endpoint doesn't return trailing EPS/P·E — derive
-  // them from the latest annual income statement when they're missing.
-  if (quote && income[0] && !quote.eps) {
-    quote.eps = income[0].eps;
-    if (quote.eps) quote.pe = quote.price / quote.eps;
+  // a rough trailing P/E from the latest annual ratios if it's missing.
+  if (quote && ratios[0] && !quote.eps && ratios[0].priceEarningsRatio) {
+    quote.pe = ratios[0].priceEarningsRatio;
   }
 
   return {
     symbol: sym,
     profile: value<CompanyProfile | null>(0, null),
     quote,
-    income,
-    incomeQuarterly: value<IncomeStatement[]>(3, []),
-    balance: value<BalanceSheetStatement[]>(4, []),
-    cashflow: value<CashFlowStatement[]>(5, []),
-    ratios: value<Ratio[]>(6, []),
-    keyMetrics: value<KeyMetrics[]>(7, []),
-    growth: value<FinancialGrowth[]>(8, []),
-    estimates: value<AnalystEstimate[]>(9, []),
-    priceTarget: value<PriceTargetSummary | null>(10, null),
-    upgradesDowngrades: value<UpgradeDowngrade[]>(11, []),
-    institutionalHolders: value<InstitutionalHolder[]>(12, []),
-    insiderTrades: value<InsiderTrade[]>(13, []),
-    dividends: value<DividendHistoryItem[]>(14, []),
-    rating: value<CompanyRating | null>(15, null),
-    news: value<NewsItem[]>(16, []),
-    peers: value<string[]>(17, []),
+    ratios,
+    keyMetrics: value<KeyMetrics[]>(3, []),
+    rating: value<CompanyRating | null>(4, null),
+    peers: value<string[]>(5, []),
   };
+}
+
+export async function getFinancialsSection(symbol: string): Promise<FinancialsSection> {
+  const sym = symbol.toUpperCase();
+  const results = await runLimited(
+    [
+      () => getIncomeStatement(sym, "annual"),
+      () => getIncomeStatement(sym, "quarter", 8),
+      () => getBalanceSheet(sym, "annual"),
+      () => getCashFlow(sym, "annual"),
+    ],
+    2
+  );
+  const value = <T>(i: number, fallback: T): T =>
+    results[i].status === "fulfilled" ? ((results[i] as PromiseFulfilledResult<T>).value ?? fallback) : fallback;
+  return {
+    income: value<IncomeStatement[]>(0, []),
+    incomeQuarterly: value<IncomeStatement[]>(1, []),
+    balance: value<BalanceSheetStatement[]>(2, []),
+    cashflow: value<CashFlowStatement[]>(3, []),
+  };
+}
+
+export async function getGrowthSection(symbol: string): Promise<GrowthSection> {
+  return { growth: await getFinancialGrowth(symbol.toUpperCase(), "annual") };
+}
+
+export async function getDividendsSection(symbol: string): Promise<DividendsSection> {
+  return { dividends: await getDividendHistory(symbol.toUpperCase()) };
+}
+
+export async function getOwnershipSection(symbol: string): Promise<OwnershipSection> {
+  const sym = symbol.toUpperCase();
+  const results = await runLimited(
+    [() => getInstitutionalHolders(sym), () => getInsiderTrades(sym)],
+    2
+  );
+  const value = <T>(i: number, fallback: T): T =>
+    results[i].status === "fulfilled" ? ((results[i] as PromiseFulfilledResult<T>).value ?? fallback) : fallback;
+  return {
+    institutionalHolders: value<InstitutionalHolder[]>(0, []),
+    insiderTrades: value<InsiderTrade[]>(1, []),
+  };
+}
+
+export async function getAnalystSection(symbol: string): Promise<AnalystSection> {
+  const sym = symbol.toUpperCase();
+  const results = await runLimited(
+    [() => getAnalystEstimates(sym), () => getPriceTargetSummary(sym), () => getUpgradesDowngrades(sym)],
+    2
+  );
+  const value = <T>(i: number, fallback: T): T =>
+    results[i].status === "fulfilled" ? ((results[i] as PromiseFulfilledResult<T>).value ?? fallback) : fallback;
+  return {
+    estimates: value<AnalystEstimate[]>(0, []),
+    priceTarget: value<PriceTargetSummary | null>(1, null),
+    upgradesDowngrades: value<UpgradeDowngrade[]>(2, []),
+  };
+}
+
+export async function getNewsSection(symbol: string): Promise<NewsSection> {
+  return { news: await getNews(symbol.toUpperCase()) };
+}
+
+export async function getSectionData(symbol: string, section: SectionName) {
+  switch (section) {
+    case "financials":
+      return getFinancialsSection(symbol);
+    case "growth":
+      return getGrowthSection(symbol);
+    case "dividends":
+      return getDividendsSection(symbol);
+    case "ownership":
+      return getOwnershipSection(symbol);
+    case "analyst":
+      return getAnalystSection(symbol);
+    case "news":
+      return getNewsSection(symbol);
+  }
 }

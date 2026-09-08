@@ -279,24 +279,46 @@ export interface StockPeers {
   peersList: string[];
 }
 
-export interface FullStockData {
+/** Loaded eagerly for every stock page: header + overview + valuation. */
+export interface CoreStockData {
   symbol: string;
   profile: CompanyProfile | null;
   quote: Quote | null;
+  ratios: Ratio[];
+  keyMetrics: KeyMetrics[];
+  rating: CompanyRating | null;
+  peers: string[];
+}
+
+/** Everything else, loaded on demand the first time a tab is opened. */
+export type SectionName = "financials" | "growth" | "dividends" | "ownership" | "analyst" | "news";
+
+export interface FinancialsSection {
   income: IncomeStatement[];
   incomeQuarterly: IncomeStatement[];
   balance: BalanceSheetStatement[];
   cashflow: CashFlowStatement[];
-  ratios: Ratio[];
-  keyMetrics: KeyMetrics[];
+}
+
+export interface GrowthSection {
   growth: FinancialGrowth[];
+}
+
+export interface DividendsSection {
+  dividends: DividendHistoryItem[];
+}
+
+export interface OwnershipSection {
+  institutionalHolders: InstitutionalHolder[];
+  insiderTrades: InsiderTrade[];
+}
+
+export interface AnalystSection {
   estimates: AnalystEstimate[];
   priceTarget: PriceTargetSummary | null;
   upgradesDowngrades: UpgradeDowngrade[];
-  institutionalHolders: InstitutionalHolder[];
-  insiderTrades: InsiderTrade[];
-  dividends: DividendHistoryItem[];
-  rating: CompanyRating | null;
+}
+
+export interface NewsSection {
   news: NewsItem[];
-  peers: string[];
 }

@@ -1,8 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import type { FullStockData } from "@/lib/types";
+import type { FinancialsSection } from "@/lib/types";
+import { useSection } from "@/lib/useSection";
 import FinancialTable from "@/components/FinancialTable";
+import { SectionError, SectionLoading } from "@/components/SectionState";
 import { balanceRows, cashFlowRows, incomeRows } from "@/lib/tableRows";
 import { useLanguage, type TranslationKey } from "@/lib/i18n";
 
@@ -12,9 +14,10 @@ const STATEMENTS: { id: "income" | "balance" | "cashflow"; labelKey: Translation
   { id: "cashflow", labelKey: "cashFlow" },
 ];
 
-export default function FinancialsTab({ data }: { data: FullStockData }) {
+export default function FinancialsTab({ symbol }: { symbol: string }) {
   const { t } = useLanguage();
   const [statement, setStatement] = useState<(typeof STATEMENTS)[number]["id"]>("income");
+  const { data, loading, error } = useSection<FinancialsSection>(symbol, "financials");
 
   return (
     <div className="card">
@@ -34,9 +37,11 @@ export default function FinancialsTab({ data }: { data: FullStockData }) {
         </div>
         <span className="text-xs text-muted">{t("annualCurrency")}</span>
       </div>
-      {statement === "income" && <FinancialTable rows={incomeRows} data={data.income} />}
-      {statement === "balance" && <FinancialTable rows={balanceRows} data={data.balance} />}
-      {statement === "cashflow" && <FinancialTable rows={cashFlowRows} data={data.cashflow} />}
+      {loading && <SectionLoading />}
+      {error && <SectionError message={error} />}
+      {data && statement === "income" && <FinancialTable rows={incomeRows} data={data.income} />}
+      {data && statement === "balance" && <FinancialTable rows={balanceRows} data={data.balance} />}
+      {data && statement === "cashflow" && <FinancialTable rows={cashFlowRows} data={data.cashflow} />}
     </div>
   );
 }
