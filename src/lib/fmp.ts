@@ -83,12 +83,15 @@ function normalizeQuote(raw: Record<string, unknown>): Quote {
     priceAvg50: pick(raw, "priceAvg50") ?? 0,
     priceAvg200: pick(raw, "priceAvg200") ?? 0,
     volume: pick(raw, "volume") ?? 0,
-    avgVolume: pick(raw, "avgVolume", "averageVolume") ?? 0,
+    // Not present on FMP's stable /quote response for the free plan;
+    // left undefined here and backfilled from other data where possible.
+    avgVolume: pick(raw, "avgVolume", "averageVolume"),
     open: pick(raw, "open") ?? 0,
     previousClose: pick(raw, "previousClose") ?? 0,
-    eps: pick(raw, "eps") ?? 0,
-    pe: pick(raw, "pe") ?? 0,
-    sharesOutstanding: pick(raw, "sharesOutstanding") ?? 0,
+    eps: pick(raw, "eps"),
+    pe: pick(raw, "pe", "peRatio"),
+    sharesOutstanding: pick(raw, "sharesOutstanding"),
+    exchange: pick<string>(raw, "exchange", "exchangeShortName"),
     timestamp: pick(raw, "timestamp"),
   };
 }
@@ -152,8 +155,14 @@ export async function getQuote(symbol: string): Promise<Quote | null> {
 
 export async function getQuotes(symbols: string[]): Promise<Quote[]> {
   if (symbols.length === 0) return [];
-  const results = await Promise.all(symbols.map((s) => getQuote(s).catch(() => null)));
-  return results.filter((q): q is Quote => q !== null);
+  const results = await runLimited(
+    symbols.map((s) => () => getQuote(s)),
+    3
+  );
+  return results
+    .filter((r): r is PromiseFulfilledResult<Quote | null> => r.status === "fulfilled")
+    .map((r) => r.value)
+    .filter((q): q is Quote => q !== null);
 }
 
 export async function getHistoricalPrices(
@@ -313,38 +322,74 @@ export async function getPeers(symbol: string): Promise<string[]> {
   }
 }
 
+/** Runs async jobs with limited concurrency — FMP's free plan appears to
+ * throttle bursts of simultaneous requests, so firing off 18 calls at once
+ * (as a plain Promise.all) silently starves most of them. */
+async function runLimited(
+  jobs: (() => Promise<unknown>)[],
+  concurrency = 3
+): Promise<PromiseSettledResult<unknown>[]> {
+  const results: PromiseSettledResult<unknown>[] = new Array(jobs.length);
+  let next = 0;
+  async function worker() {
+    while (next < jobs.length) {
+      const i = next++;
+      try {
+        results[i] = { status: "fulfilled", value: await jobs[i]() };
+      } catch (reason) {
+        results[i] = { status: "rejected", reason };
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(concurrency, jobs.length) }, worker));
+  return results;
+}
+
 export async function getFullStockData(symbol: string): Promise<FullStockData> {
   const sym = symbol.toUpperCase();
 
-  const results = await Promise.allSettled([
-    getProfile(sym),
-    getQuote(sym),
-    getIncomeStatement(sym, "annual"),
-    getIncomeStatement(sym, "quarter", 8),
-    getBalanceSheet(sym, "annual"),
-    getCashFlow(sym, "annual"),
-    getRatios(sym, "annual"),
-    getKeyMetrics(sym, "annual"),
-    getFinancialGrowth(sym, "annual"),
-    getAnalystEstimates(sym),
-    getPriceTargetSummary(sym),
-    getUpgradesDowngrades(sym),
-    getInstitutionalHolders(sym),
-    getInsiderTrades(sym),
-    getDividendHistory(sym),
-    getRating(sym),
-    getNews(sym),
-    getPeers(sym),
-  ]);
+  const results = await runLimited(
+    [
+      () => getProfile(sym),
+      () => getQuote(sym),
+      () => getIncomeStatement(sym, "annual"),
+      () => getIncomeStatement(sym, "quarter", 8),
+      () => getBalanceSheet(sym, "annual"),
+      () => getCashFlow(sym, "annual"),
+      () => getRatios(sym, "annual"),
+      () => getKeyMetrics(sym, "annual"),
+      () => getFinancialGrowth(sym, "annual"),
+      () => getAnalystEstimates(sym),
+      () => getPriceTargetSummary(sym),
+      () => getUpgradesDowngrades(sym),
+      () => getInstitutionalHolders(sym),
+      () => getInsiderTrades(sym),
+      () => getDividendHistory(sym),
+      () => getRating(sym),
+      () => getNews(sym),
+      () => getPeers(sym),
+    ],
+    3
+  );
 
   const value = <T>(i: number, fallback: T): T =>
     results[i].status === "fulfilled" ? ((results[i] as PromiseFulfilledResult<T>).value ?? fallback) : fallback;
 
+  const quote = value<Quote | null>(1, null);
+  const income = value<IncomeStatement[]>(2, []);
+
+  // The free-plan quote endpoint doesn't return trailing EPS/P·E — derive
+  // them from the latest annual income statement when they're missing.
+  if (quote && income[0] && !quote.eps) {
+    quote.eps = income[0].eps;
+    if (quote.eps) quote.pe = quote.price / quote.eps;
+  }
+
   return {
     symbol: sym,
     profile: value<CompanyProfile | null>(0, null),
-    quote: value<Quote | null>(1, null),
-    income: value<IncomeStatement[]>(2, []),
+    quote,
+    income,
     incomeQuarterly: value<IncomeStatement[]>(3, []),
     balance: value<BalanceSheetStatement[]>(4, []),
     cashflow: value<CashFlowStatement[]>(5, []),

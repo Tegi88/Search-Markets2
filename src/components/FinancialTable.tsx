@@ -5,7 +5,8 @@ import { useLanguage, type TranslationKey } from "@/lib/i18n";
 
 export interface TableRowConfig<T> {
   labelKey: TranslationKey;
-  key: keyof T;
+  key?: keyof T;
+  compute?: (row: T) => number | undefined;
   format: (value: number) => string;
   bold?: boolean;
 }
@@ -37,10 +38,10 @@ export default function FinancialTable<T extends { date: string }>({
         </thead>
         <tbody>
           {rows.map((row) => (
-            <tr key={String(row.key)} className={row.bold ? "font-semibold" : ""}>
+            <tr key={row.labelKey} className={row.bold ? "font-semibold" : ""}>
               <td>{t(row.labelKey)}</td>
               {ordered.map((d) => {
-                const raw = d[row.key];
+                const raw = row.compute ? row.compute(d) : row.key ? d[row.key] : undefined;
                 const num = typeof raw === "number" ? raw : NaN;
                 return <td key={d.date}>{Number.isNaN(num) ? "—" : row.format(num)}</td>;
               })}

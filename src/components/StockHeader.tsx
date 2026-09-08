@@ -90,7 +90,7 @@ export default function StockHeader({
           value={quote ? `${formatCurrency(quote.yearLow, currency)} – ${formatCurrency(quote.yearHigh, currency)}` : "—"}
         />
         <Stat label={t("volume")} value={formatCompact(quote?.volume)} />
-        <Stat label={t("avgVolume")} value={formatCompact(quote?.avgVolume)} />
+        <Stat label={t("exchange")} value={quote?.exchange || profile.exchangeShortName || "—"} />
         <Stat label={t("marketCap")} value={formatCompact(quote?.marketCap ?? profile.mktCap)} />
         <Stat label={t("peRatioTTM")} value={quote?.pe ? quote.pe.toFixed(2) : "—"} />
         <Stat label={t("epsTTM")} value={quote?.eps ? quote.eps.toFixed(2) : "—"} />

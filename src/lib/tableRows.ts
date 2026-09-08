@@ -9,23 +9,29 @@ import type {
 } from "./types";
 import type { TableRowConfig } from "@/components/FinancialTable";
 
+const ratioOf = (num: keyof IncomeStatement, den: keyof IncomeStatement) => (row: IncomeStatement) => {
+  const n = row[num] as number;
+  const d = row[den] as number;
+  return d ? n / d : undefined;
+};
+
 export const incomeRows: TableRowConfig<IncomeStatement>[] = [
   { labelKey: "revenue", key: "revenue", format: formatCompact, bold: true },
   { labelKey: "costOfRevenue", key: "costOfRevenue", format: formatCompact },
   { labelKey: "grossProfit", key: "grossProfit", format: formatCompact },
-  { labelKey: "grossMargin", key: "grossProfitRatio", format: (v) => formatPercent(v) },
+  { labelKey: "grossMargin", compute: ratioOf("grossProfit", "revenue"), format: (v) => formatPercent(v) },
   { labelKey: "rdExpense", key: "researchAndDevelopmentExpenses", format: formatCompact },
   { labelKey: "sgaExpense", key: "sellingGeneralAndAdministrativeExpenses", format: formatCompact },
   { labelKey: "operatingIncome", key: "operatingIncome", format: formatCompact, bold: true },
-  { labelKey: "operatingMargin", key: "operatingIncomeRatio", format: (v) => formatPercent(v) },
+  { labelKey: "operatingMargin", compute: ratioOf("operatingIncome", "revenue"), format: (v) => formatPercent(v) },
   { labelKey: "ebitda", key: "ebitda", format: formatCompact },
-  { labelKey: "ebitdaMargin", key: "ebitdaratio", format: (v) => formatPercent(v) },
+  { labelKey: "ebitdaMargin", compute: ratioOf("ebitda", "revenue"), format: (v) => formatPercent(v) },
   { labelKey: "interestExpense", key: "interestExpense", format: formatCompact },
   { labelKey: "incomeTax", key: "incomeTaxExpense", format: formatCompact },
   { labelKey: "netIncome", key: "netIncome", format: formatCompact, bold: true },
-  { labelKey: "netMargin", key: "netIncomeRatio", format: (v) => formatPercent(v) },
+  { labelKey: "netMargin", compute: ratioOf("netIncome", "revenue"), format: (v) => formatPercent(v) },
   { labelKey: "epsBasic", key: "eps", format: (v) => formatNumber(v) },
-  { labelKey: "epsDiluted", key: "epsdiluted", format: (v) => formatNumber(v) },
+  { labelKey: "epsDiluted", key: "epsDiluted", format: (v) => formatNumber(v) },
   { labelKey: "sharesOutstanding", key: "weightedAverageShsOut", format: formatCompact },
 ];
 

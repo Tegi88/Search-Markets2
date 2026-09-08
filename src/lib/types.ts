@@ -49,13 +49,16 @@ export interface Quote {
   priceAvg50: number;
   priceAvg200: number;
   volume: number;
-  avgVolume: number;
+  // Not returned by FMP's stable /quote endpoint on the free plan — left
+  // optional and backfilled from the income statement where possible.
+  avgVolume?: number;
   open: number;
   previousClose: number;
-  eps: number;
-  pe: number;
+  eps?: number;
+  pe?: number;
   earningsAnnouncement?: string;
-  sharesOutstanding: number;
+  sharesOutstanding?: number;
+  exchange?: string;
   timestamp?: number;
 }
 
@@ -72,23 +75,19 @@ export interface HistoricalPrice {
 export interface IncomeStatement {
   date: string;
   period: string;
-  calendarYear?: string;
+  fiscalYear?: string;
   revenue: number;
   costOfRevenue: number;
   grossProfit: number;
-  grossProfitRatio: number;
   researchAndDevelopmentExpenses: number;
   sellingGeneralAndAdministrativeExpenses: number;
   operatingExpenses: number;
   operatingIncome: number;
-  operatingIncomeRatio: number;
   interestExpense: number;
   ebitda: number;
-  ebitdaratio: number;
   netIncome: number;
-  netIncomeRatio: number;
   eps: number;
-  epsdiluted: number;
+  epsDiluted: number;
   weightedAverageShsOut: number;
   incomeTaxExpense: number;
 }

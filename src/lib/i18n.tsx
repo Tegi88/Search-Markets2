@@ -65,6 +65,7 @@ const dict = {
   dayRange: { en: "Day Range", he: "טווח יומי" },
   yearRange: { en: "52W Range", he: "טווח 52 שבועות" },
   volume: { en: "Volume", he: "מחזור" },
+  exchange: { en: "Exchange", he: "בורסה" },
   peRatioTTM: { en: "P/E (TTM)", he: "מכפיל רווח (TTM)" },
   epsTTM: { en: "EPS (TTM)", he: "רווח למניה (TTM)" },
   beta: { en: "Beta", he: "בטא" },
