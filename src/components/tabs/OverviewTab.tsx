@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import type { CoreStockData } from "@/lib/types";
 import PriceChart from "@/components/PriceChart";
@@ -8,10 +9,38 @@ import { formatCompact, formatPercent, formatRatio } from "@/lib/format";
 import { useLanguage } from "@/lib/i18n";
 
 export default function OverviewTab({ data }: { data: CoreStockData }) {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const { profile, ratios, keyMetrics, peers } = data;
   const latestRatio = ratios[0];
   const latestMetrics = keyMetrics[0];
+
+  const [translated, setTranslated] = useState<string | null>(null);
+  const [translating, setTranslating] = useState(false);
+  const [translateError, setTranslateError] = useState(false);
+
+  async function handleTranslate() {
+    if (!profile?.description) return;
+    if (translated) {
+      setTranslated(null);
+      return;
+    }
+    setTranslating(true);
+    setTranslateError(false);
+    try {
+      const res = await fetch("/api/translate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: profile.description, target: "he" }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.translated) throw new Error(json.error ?? "translate failed");
+      setTranslated(json.translated);
+    } catch {
+      setTranslateError(true);
+    } finally {
+      setTranslating(false);
+    }
+  }
 
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
@@ -20,8 +49,20 @@ export default function OverviewTab({ data }: { data: CoreStockData }) {
         <PriceChart symbol={data.symbol} currency={profile?.currency} />
         {profile?.description && (
           <div className="card p-5">
-            <h3 className="mb-2 font-medium">{t("about")} {profile.companyName}</h3>
-            <p className="text-sm leading-relaxed text-muted">{profile.description}</p>
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <h3 className="font-medium">{t("about")} {profile.companyName}</h3>
+              {lang === "he" && (
+                <button
+                  onClick={handleTranslate}
+                  disabled={translating}
+                  className="shrink-0 rounded-md border px-2.5 py-1 text-xs text-muted hover:border-accent hover:text-accent disabled:opacity-50"
+                >
+                  {translating ? t("translating") : translated ? t("showOriginal") : t("translateToHebrew")}
+                </button>
+              )}
+            </div>
+            <p className="text-sm leading-relaxed text-muted">{translated ?? profile.description}</p>
+            {translateError && <p className="mt-2 text-xs text-down">{t("translateFailed")}</p>}
             {profile.website && (
               <a
                 href={profile.website}

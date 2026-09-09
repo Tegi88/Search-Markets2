@@ -37,22 +37,33 @@ export async function GET(
 
   // Yahoo and Stooq are free with no meaningful daily cap, so they carry
   // the price chart; FMP (quota-limited) is only a last resort.
-  let prices = await getYahooHistoricalPrices(ticker, range);
+  const debug: Record<string, string> = {};
+  let prices: Awaited<ReturnType<typeof getYahooHistoricalPrices>> = [];
   let source = "yahoo";
 
-  if (prices.length === 0) {
-    prices = await getStooqHistoricalPrices(ticker, from ? { from } : {});
-    source = "stooq";
+  try {
+    prices = await getYahooHistoricalPrices(ticker, range);
+  } catch (err) {
+    debug.yahoo = err instanceof Error ? err.message : String(err);
   }
 
   if (prices.length === 0) {
+    source = "stooq";
     try {
-      prices = await getHistoricalPrices(ticker, from ? { from } : {});
-      source = "fmp";
-    } catch {
-      // fall through with empty prices
+      prices = await getStooqHistoricalPrices(ticker, from ? { from } : {});
+    } catch (err) {
+      debug.stooq = err instanceof Error ? err.message : String(err);
     }
   }
 
-  return NextResponse.json({ prices, source });
+  if (prices.length === 0) {
+    source = "fmp";
+    try {
+      prices = await getHistoricalPrices(ticker, from ? { from } : {});
+    } catch (err) {
+      debug.fmp = err instanceof Error ? err.message : String(err);
+    }
+  }
+
+  return NextResponse.json({ prices, source, debug: Object.keys(debug).length ? debug : undefined });
 }

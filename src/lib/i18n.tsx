@@ -80,6 +80,10 @@ const dict = {
   loadingChart: { en: "Loading chart…", he: "טוען גרף…" },
 
   about: { en: "About", he: "אודות" },
+  translateToHebrew: { en: "Translate to Hebrew", he: "תרגם לעברית" },
+  showOriginal: { en: "Show original", he: "הצג מקור" },
+  translating: { en: "Translating…", he: "מתרגם…" },
+  translateFailed: { en: "Translation failed.", he: "התרגום נכשל." },
   keyStatistics: { en: "Key Statistics", he: "נתונים עיקריים" },
   peRatio: { en: "P/E Ratio", he: "מכפיל רווח" },
   pbRatio: { en: "P/B Ratio", he: "מכפיל הון" },

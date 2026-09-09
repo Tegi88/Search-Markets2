@@ -33,24 +33,21 @@ interface YahooChartResult {
   };
 }
 
-async function fetchChart(
-  symbol: string,
-  params: Record<string, string>
-): Promise<YahooChartResult | null> {
+async function fetchChart(symbol: string, params: Record<string, string>): Promise<YahooChartResult> {
   const usp = new URLSearchParams(params);
   const url = `${CHART_BASE}/${encodeURIComponent(symbol)}?${usp.toString()}`;
-  try {
-    const res = await fetch(url, {
-      headers: { "User-Agent": "Mozilla/5.0 (compatible; SearchMarkets/1.0)" },
-      next: { revalidate: 60 },
-    });
-    if (!res.ok) return null;
-    const json = await res.json();
-    const result = json?.chart?.result?.[0] as YahooChartResult | undefined;
-    return result ?? null;
-  } catch {
-    return null;
+  const res = await fetch(url, {
+    headers: { "User-Agent": "Mozilla/5.0 (compatible; SearchMarkets/1.0)" },
+    next: { revalidate: 60 },
+  });
+  if (!res.ok) throw new Error(`Yahoo chart failed: ${res.status} ${res.statusText} (${url})`);
+  const json = await res.json();
+  const result = json?.chart?.result?.[0] as YahooChartResult | undefined;
+  if (!result) {
+    const err = json?.chart?.error;
+    throw new Error(`Yahoo chart returned no result${err ? `: ${JSON.stringify(err)}` : ""} (${url})`);
   }
+  return result;
 }
 
 const RANGE_TO_YAHOO: Record<string, { range: string; interval: string }> = {
@@ -67,7 +64,9 @@ export async function getYahooHistoricalPrices(
 ): Promise<HistoricalPrice[]> {
   const { range, interval } = RANGE_TO_YAHOO[uiRange] ?? RANGE_TO_YAHOO["1Y"];
   const result = await fetchChart(symbol, { range, interval });
-  if (!result?.timestamp || !result.indicators?.quote?.[0]) return [];
+  if (!result.timestamp || !result.indicators?.quote?.[0]) {
+    throw new Error(`Yahoo chart for ${symbol} had no timestamp/quote series`);
+  }
 
   const q = result.indicators.quote[0];
   const adj = result.indicators.adjclose?.[0]?.adjclose;
@@ -106,7 +105,7 @@ export interface YahooQuoteLike {
 
 export async function getYahooQuote(symbol: string): Promise<YahooQuoteLike | null> {
   const result = await fetchChart(symbol, { range: "1d", interval: "1d" });
-  const meta = result?.meta;
+  const meta = result.meta;
   if (!meta) return null;
   return {
     price: meta.regularMarketPrice,
