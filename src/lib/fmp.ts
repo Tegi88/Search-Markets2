@@ -27,6 +27,7 @@ import type {
   UpgradeDowngrade,
 } from "./types";
 import { getYahooQuote } from "./yahoo";
+import { getYahooNews } from "./yahooNews";
 import {
   getEdgarBalanceSheet,
   getEdgarCashFlow,
@@ -615,7 +616,22 @@ export async function getAnalystSection(symbol: string): Promise<AnalystSection>
 }
 
 export async function getNewsSection(symbol: string): Promise<NewsSection> {
-  return { news: await getNews(symbol.toUpperCase()) };
+  const sym = symbol.toUpperCase();
+  const debug: Record<string, string> = {};
+
+  try {
+    const news = await getYahooNews(sym);
+    if (news.length > 0) return { news };
+  } catch (err) {
+    debug.yahooNews = err instanceof Error ? err.message : String(err);
+  }
+
+  try {
+    return { news: await getNews(sym) };
+  } catch (err) {
+    debug.news = err instanceof Error ? err.message : String(err);
+    return { news: [], debug };
+  }
 }
 
 export async function getSectionData(symbol: string, section: SectionName) {

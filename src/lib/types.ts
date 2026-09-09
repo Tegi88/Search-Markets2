@@ -329,4 +329,5 @@ export interface AnalystSection {
 
 export interface NewsSection {
   news: NewsItem[];
+  debug?: Record<string, string>;
 }
