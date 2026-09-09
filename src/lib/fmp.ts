@@ -247,10 +247,24 @@ export async function getFinancialGrowth(
   return asArray<FinancialGrowth>(data);
 }
 
+function normalizeAnalystEstimate(raw: Record<string, unknown>): AnalystEstimate {
+  return {
+    date: pick<string>(raw, "date") ?? "",
+    estimatedRevenueAvg: pick(raw, "revenueAvg", "estimatedRevenueAvg") ?? NaN,
+    estimatedRevenueLow: pick(raw, "revenueLow", "estimatedRevenueLow") ?? NaN,
+    estimatedRevenueHigh: pick(raw, "revenueHigh", "estimatedRevenueHigh") ?? NaN,
+    estimatedEpsAvg: pick(raw, "epsAvg", "estimatedEpsAvg") ?? NaN,
+    estimatedEpsLow: pick(raw, "epsLow", "estimatedEpsLow") ?? NaN,
+    estimatedEpsHigh: pick(raw, "epsHigh", "estimatedEpsHigh") ?? NaN,
+    numberAnalystEstimatedRevenue: pick(raw, "numAnalystsRevenue", "numberAnalystEstimatedRevenue") ?? NaN,
+    numberAnalystsEstimatedEps: pick(raw, "numAnalystsEps", "numberAnalystsEstimatedEps") ?? NaN,
+  };
+}
+
 export async function getAnalystEstimates(symbol: string): Promise<AnalystEstimate[]> {
   try {
     const data = await get<unknown>(url("/analyst-estimates", { symbol, period: "annual", limit: 8 }));
-    return asArray<AnalystEstimate>(data);
+    return asArray<Record<string, unknown>>(data).map(normalizeAnalystEstimate);
   } catch {
     return [];
   }

@@ -3,7 +3,7 @@
 import type { AnalystSection, CompanyRating } from "@/lib/types";
 import { useSection } from "@/lib/useSection";
 import { SectionError, SectionLoading } from "@/components/SectionState";
-import { formatCompact, formatCurrency, formatDate } from "@/lib/format";
+import { formatCompact, formatCurrency, formatDate, formatNumber } from "@/lib/format";
 import { useLanguage } from "@/lib/i18n";
 
 export default function AnalystTab({
@@ -96,10 +96,10 @@ export default function AnalystTab({
                   <td>{formatCompact(e.estimatedRevenueLow)}</td>
                   <td>{formatCompact(e.estimatedRevenueAvg)}</td>
                   <td>{formatCompact(e.estimatedRevenueHigh)}</td>
-                  <td>{e.estimatedEpsLow?.toFixed(2) ?? "—"}</td>
-                  <td>{e.estimatedEpsAvg?.toFixed(2) ?? "—"}</td>
-                  <td>{e.estimatedEpsHigh?.toFixed(2) ?? "—"}</td>
-                  <td>{e.numberAnalystsEstimatedEps ?? "—"}</td>
+                  <td>{formatNumber(e.estimatedEpsLow)}</td>
+                  <td>{formatNumber(e.estimatedEpsAvg)}</td>
+                  <td>{formatNumber(e.estimatedEpsHigh)}</td>
+                  <td>{Number.isNaN(e.numberAnalystsEstimatedEps) ? "—" : e.numberAnalystsEstimatedEps}</td>
                 </tr>
               ))}
             </tbody>

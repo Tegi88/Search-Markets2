@@ -97,14 +97,20 @@ async function fetchAndParseForm4(
   primaryDocument: string,
   filingDate: string,
   symbol: string
-): Promise<InsiderTrade[]> {
+): Promise<{ trades: InsiderTrade[]; error?: string }> {
   const accNoDashes = accessionNumber.replace(/-/g, "");
   const url = `https://www.sec.gov/Archives/edgar/data/${Number(cikNum)}/${accNoDashes}/${primaryDocument}`;
-  const res = await fetch(url, { headers: XML_HEADERS, next: { revalidate: 86400 } });
-  if (!res.ok) return [];
-  const xml = await res.text();
-  if (!xml.includes("nonDerivativeTransaction") && !xml.includes("ownershipDocument")) return [];
-  return parseForm4(xml, symbol, filingDate);
+  try {
+    const res = await fetch(url, { headers: XML_HEADERS, next: { revalidate: 86400 } });
+    if (!res.ok) return { trades: [], error: `${res.status} fetching ${url}` };
+    const xml = await res.text();
+    if (!xml.includes("nonDerivativeTransaction") && !xml.includes("ownershipDocument")) {
+      return { trades: [], error: `unrecognized document shape at ${url}` };
+    }
+    return { trades: parseForm4(xml, symbol, filingDate) };
+  } catch (err) {
+    return { trades: [], error: `${err instanceof Error ? err.message : String(err)} fetching ${url}` };
+  }
 }
 
 /**
@@ -112,28 +118,40 @@ async function fetchAndParseForm4(
  * filings are pulled and parsed directly from SEC EDGAR instead. Covers
  * open-market buys/sells, awards, and exercises for officers, directors,
  * and 10%+ owners — the same population FMP's endpoint reports on.
+ *
+ * Throws (rather than returning []) whenever the result is empty, with
+ * enough detail to tell "no Form 4s in SEC's index" apart from "found
+ * filings but couldn't fetch/parse any of them" — both look identical as
+ * a bare empty array otherwise.
  */
 export async function getEdgarInsiderTrades(symbol: string, limit = 20): Promise<InsiderTrade[]> {
   const cik = await getCik(symbol);
   const submissions = await getRecentFilings(cik);
   const recent = submissions.filings?.recent;
-  if (!recent) return [];
+  if (!recent) throw new Error(`SEC submissions for CIK${cik} had no filings.recent`);
 
   const form4Indexes: number[] = [];
   for (let i = 0; i < recent.form.length && form4Indexes.length < 15; i++) {
     if (recent.form[i] === "4" || recent.form[i] === "4/A") form4Indexes.push(i);
   }
+  if (form4Indexes.length === 0) {
+    throw new Error(`No Form 4 filings for ${symbol} among ${recent.form.length} recent SEC filings`);
+  }
 
   const results = await Promise.all(
     form4Indexes.map((i) =>
-      fetchAndParseForm4(cik, recent.accessionNumber[i], recent.primaryDocument[i], recent.filingDate[i], symbol).catch(
-        () => []
-      )
+      fetchAndParseForm4(cik, recent.accessionNumber[i], recent.primaryDocument[i], recent.filingDate[i], symbol)
     )
   );
 
-  return results
-    .flat()
-    .sort((a, b) => (a.transactionDate < b.transactionDate ? 1 : -1))
-    .slice(0, limit);
+  const trades = results.flatMap((r) => r.trades);
+  if (trades.length === 0) {
+    const sampleError = results.find((r) => r.error)?.error;
+    throw new Error(
+      `Found ${form4Indexes.length} Form 4 filings for ${symbol} but parsed 0 transactions` +
+        (sampleError ? ` (e.g. ${sampleError})` : "")
+    );
+  }
+
+  return trades.sort((a, b) => (a.transactionDate < b.transactionDate ? 1 : -1)).slice(0, limit);
 }
