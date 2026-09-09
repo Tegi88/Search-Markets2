@@ -22,29 +22,25 @@ async function loadCikMap(): Promise<Map<string, string>> {
     next: { revalidate: 86400 },
   });
   if (!res.ok) {
-    console.error(`[edgar] company_tickers.json failed: ${res.status} ${res.statusText}`);
-    return new Map();
+    throw new Error(`SEC company_tickers.json failed: ${res.status} ${res.statusText}`);
   }
   const json = (await res.json()) as Record<string, TickerEntry>;
   const map = new Map<string, string>();
   for (const entry of Object.values(json)) {
     map.set(entry.ticker.toUpperCase(), String(entry.cik_str).padStart(10, "0"));
   }
-  console.error(`[edgar] loaded ${map.size} tickers from SEC`);
   return map;
 }
 
-export async function getCik(symbol: string): Promise<string | null> {
-  try {
-    if (!cikMapPromise) cikMapPromise = loadCikMap();
-    const map = await cikMapPromise;
-    const cik = map.get(symbol.toUpperCase()) ?? null;
-    if (!cik) console.error(`[edgar] no CIK found for ${symbol} (map size ${map.size})`);
-    return cik;
-  } catch (err) {
-    console.error(`[edgar] getCik(${symbol}) threw:`, err);
-    return null;
-  }
+/** Throws (rather than returning null) so callers can surface exactly why
+ * EDGAR wasn't used — unreachable vs. not a US-listed filer are both
+ * useful to distinguish when diagnosing an empty Financials tab. */
+export async function getCik(symbol: string): Promise<string> {
+  if (!cikMapPromise) cikMapPromise = loadCikMap();
+  const map = await cikMapPromise;
+  const cik = map.get(symbol.toUpperCase());
+  if (!cik) throw new Error(`No SEC CIK for ${symbol} (not a US-listed filer, or an ETF/fund)`);
+  return cik;
 }
 
 interface XbrlFact {
@@ -63,27 +59,22 @@ interface CompanyFacts {
   };
 }
 
-const factsCache = new Map<string, Promise<CompanyFacts | null>>();
+const factsCache = new Map<string, Promise<CompanyFacts>>();
 
-async function loadCompanyFacts(cik: string): Promise<CompanyFacts | null> {
+async function loadCompanyFacts(cik: string): Promise<CompanyFacts> {
   if (!factsCache.has(cik)) {
     factsCache.set(
       cik,
       fetch(`https://data.sec.gov/api/xbrl/companyfacts/CIK${cik}.json`, {
         headers: HEADERS,
         next: { revalidate: 86400 },
+      }).then((res) => {
+        if (!res.ok) {
+          factsCache.delete(cik);
+          throw new Error(`SEC companyfacts failed for CIK${cik}: ${res.status} ${res.statusText}`);
+        }
+        return res.json();
       })
-        .then((res) => {
-          if (!res.ok) {
-            console.error(`[edgar] companyfacts CIK${cik} failed: ${res.status} ${res.statusText}`);
-            return null;
-          }
-          return res.json();
-        })
-        .catch((err) => {
-          console.error(`[edgar] companyfacts CIK${cik} threw:`, err);
-          return null;
-        })
     );
   }
   return factsCache.get(cik)!;
@@ -140,9 +131,7 @@ function mergeByYear(
 
 export async function getEdgarIncomeStatement(symbol: string): Promise<IncomeStatement[]> {
   const cik = await getCik(symbol);
-  if (!cik) return [];
   const facts = await loadCompanyFacts(cik);
-  if (!facts) return [];
 
   const rows = mergeByYear({
     revenue: extractAnnual(facts, [
@@ -189,9 +178,7 @@ export async function getEdgarIncomeStatement(symbol: string): Promise<IncomeSta
 
 export async function getEdgarBalanceSheet(symbol: string): Promise<BalanceSheetStatement[]> {
   const cik = await getCik(symbol);
-  if (!cik) return [];
   const facts = await loadCompanyFacts(cik);
-  if (!facts) return [];
 
   const rows = mergeByYear({
     cashAndCashEquivalents: extractAnnual(facts, [
@@ -215,9 +202,7 @@ export async function getEdgarBalanceSheet(symbol: string): Promise<BalanceSheet
 
 export async function getEdgarCashFlow(symbol: string): Promise<CashFlowStatement[]> {
   const cik = await getCik(symbol);
-  if (!cik) return [];
   const facts = await loadCompanyFacts(cik);
-  if (!facts) return [];
 
   const rows = mergeByYear({
     netIncome: extractAnnual(facts, ["NetIncomeLoss", "ProfitLoss"]),

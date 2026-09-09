@@ -3,6 +3,7 @@
 import Link from "next/link";
 import type { CoreStockData } from "@/lib/types";
 import PriceChart from "@/components/PriceChart";
+import DebugPanel from "@/components/DebugPanel";
 import { formatCompact, formatPercent, formatRatio } from "@/lib/format";
 import { useLanguage } from "@/lib/i18n";
 
@@ -15,6 +16,7 @@ export default function OverviewTab({ data }: { data: CoreStockData }) {
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
       <div className="lg:col-span-2 flex flex-col gap-4">
+        <DebugPanel debug={data.debug} />
         <PriceChart symbol={data.symbol} currency={profile?.currency} />
         {profile?.description && (
           <div className="card p-5">

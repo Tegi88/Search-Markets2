@@ -3,6 +3,7 @@
 import type { OwnershipSection } from "@/lib/types";
 import { useSection } from "@/lib/useSection";
 import { SectionError, SectionLoading } from "@/components/SectionState";
+import DebugPanel from "@/components/DebugPanel";
 import { formatCompact, formatCurrency, formatDate } from "@/lib/format";
 import { useLanguage } from "@/lib/i18n";
 
@@ -19,6 +20,7 @@ export default function OwnershipTab({ symbol, currency }: { symbol: string; cur
 
   return (
     <div className="flex flex-col gap-4">
+      <DebugPanel debug={data.debug} />
       <div className="card overflow-hidden">
         <div className="border-b p-4">
           <h3 className="font-medium">{t("topInstitutionalHolders")}</h3>

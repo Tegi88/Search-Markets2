@@ -291,6 +291,9 @@ export interface CoreStockData {
   keyMetrics: KeyMetrics[];
   rating: CompanyRating | null;
   peers: string[];
+  /** Per-field failure reasons, present only when something came back
+   * empty — shown in the UI so a data gap is self-explanatory. */
+  debug?: Record<string, string>;
 }
 
 /** Everything else, loaded on demand the first time a tab is opened. */
@@ -300,6 +303,7 @@ export interface FinancialsSection {
   income: IncomeStatement[];
   balance: BalanceSheetStatement[];
   cashflow: CashFlowStatement[];
+  debug?: Record<string, string>;
 }
 
 export interface GrowthSection {
@@ -313,6 +317,7 @@ export interface DividendsSection {
 export interface OwnershipSection {
   institutionalHolders: InstitutionalHolder[];
   insiderTrades: InsiderTrade[];
+  debug?: Record<string, string>;
 }
 
 export interface AnalystSection {

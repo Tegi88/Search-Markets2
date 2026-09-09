@@ -269,21 +269,13 @@ export async function getUpgradesDowngrades(symbol: string): Promise<UpgradeDown
 }
 
 export async function getInstitutionalHolders(symbol: string): Promise<InstitutionalHolder[]> {
-  try {
-    const data = await get<unknown>(url("/institutional-ownership/extract", { symbol }));
-    return asArray<InstitutionalHolder>(data);
-  } catch {
-    return [];
-  }
+  const data = await get<unknown>(url("/institutional-ownership/extract", { symbol }));
+  return asArray<InstitutionalHolder>(data);
 }
 
 export async function getInsiderTrades(symbol: string): Promise<InsiderTrade[]> {
-  try {
-    const data = await get<unknown>(url("/insider-trading/search", { symbol, page: 0 }));
-    return asArray<InsiderTrade>(data);
-  } catch {
-    return [];
-  }
+  const data = await get<unknown>(url("/insider-trading/search", { symbol, page: 0 }));
+  return asArray<InsiderTrade>(data);
 }
 
 export async function getDividendHistory(symbol: string): Promise<DividendHistoryItem[]> {
@@ -313,12 +305,8 @@ export async function getRating(symbol: string): Promise<CompanyRating | null> {
 }
 
 export async function getNews(symbol: string, limit = 12): Promise<NewsItem[]> {
-  try {
-    const data = await get<unknown>(url("/news/stock", { symbols: symbol, limit }), 120);
-    return asArray<NewsItem>(data);
-  } catch {
-    return [];
-  }
+  const data = await get<unknown>(url("/news/stock", { symbols: symbol, limit }), 120);
+  return asArray<NewsItem>(data);
 }
 
 export async function getPeers(symbol: string): Promise<string[]> {
@@ -354,6 +342,11 @@ async function runLimited(
   }
   await Promise.all(Array.from({ length: Math.min(concurrency, jobs.length) }, worker));
   return results;
+}
+
+function errMsg(result: PromiseSettledResult<unknown>): string | undefined {
+  if (result.status !== "rejected") return undefined;
+  return result.reason instanceof Error ? result.reason.message : String(result.reason);
 }
 
 /**
@@ -449,6 +442,13 @@ export async function getCoreStockData(symbol: string): Promise<CoreStockData> {
     quote.pe = ratios[0].priceEarningsRatio;
   }
 
+  const debug: Record<string, string> = {};
+  const labels = ["profile", "quote", "ratios", "keyMetrics", "rating", "peers"];
+  results.forEach((r, i) => {
+    const msg = errMsg(r);
+    if (msg) debug[labels[i]] = msg;
+  });
+
   return {
     symbol: sym,
     profile,
@@ -457,6 +457,7 @@ export async function getCoreStockData(symbol: string): Promise<CoreStockData> {
     keyMetrics: value<KeyMetrics[]>(3, []),
     rating: value<CompanyRating | null>(4, null),
     peers: value<string[]>(5, []),
+    debug: Object.keys(debug).length > 0 ? debug : undefined,
   };
 }
 
@@ -466,21 +467,37 @@ export async function getFinancialsSection(symbol: string): Promise<FinancialsSe
   // SEC EDGAR (official, free, unlimited) is the primary source for US
   // tickers — it shares one cached CIK lookup + company-facts fetch across
   // all three statements, so this costs zero FMP quota when it succeeds.
-  const [edgarIncome, edgarBalance, edgarCashflow] = await Promise.all([
-    getEdgarIncomeStatement(sym).catch(() => []),
-    getEdgarBalanceSheet(sym).catch(() => []),
-    getEdgarCashFlow(sym).catch(() => []),
-  ]);
+  const edgarResults = await runLimited(
+    [() => getEdgarIncomeStatement(sym), () => getEdgarBalanceSheet(sym), () => getEdgarCashFlow(sym)],
+    3
+  );
+  const edgarValue = <T>(i: number): T[] =>
+    edgarResults[i].status === "fulfilled" ? ((edgarResults[i] as PromiseFulfilledResult<T[]>).value ?? []) : [];
+  const edgarIncome = edgarValue<IncomeStatement>(0);
+  const edgarBalance = edgarValue<BalanceSheetStatement>(1);
+  const edgarCashflow = edgarValue<CashFlowStatement>(2);
   console.error(
     `[financials] ${sym} EDGAR rows — income:${edgarIncome.length} balance:${edgarBalance.length} cashflow:${edgarCashflow.length}`
   );
 
-  const needsFmp: (() => Promise<unknown>)[] = [];
-  if (edgarIncome.length === 0) needsFmp.push(() => getIncomeStatement(sym, "annual"));
-  if (edgarBalance.length === 0) needsFmp.push(() => getBalanceSheet(sym, "annual"));
-  if (edgarCashflow.length === 0) needsFmp.push(() => getCashFlow(sym, "annual"));
+  const debug: Record<string, string> = {};
+  const edgarLabels = ["edgarIncome", "edgarBalance", "edgarCashflow"];
+  edgarResults.forEach((r, i) => {
+    const msg = errMsg(r);
+    if (msg) debug[edgarLabels[i]] = msg;
+  });
 
-  const fmpResults = needsFmp.length > 0 ? await runLimited(needsFmp, 2) : [];
+  const needsFmp: { label: string; job: () => Promise<unknown> }[] = [];
+  if (edgarIncome.length === 0) needsFmp.push({ label: "fmpIncome", job: () => getIncomeStatement(sym, "annual") });
+  if (edgarBalance.length === 0) needsFmp.push({ label: "fmpBalance", job: () => getBalanceSheet(sym, "annual") });
+  if (edgarCashflow.length === 0) needsFmp.push({ label: "fmpCashflow", job: () => getCashFlow(sym, "annual") });
+
+  const fmpResults = needsFmp.length > 0 ? await runLimited(needsFmp.map((n) => n.job), 2) : [];
+  fmpResults.forEach((r, i) => {
+    const msg = errMsg(r);
+    if (msg) debug[needsFmp[i].label] = msg;
+  });
+
   let fmpIdx = 0;
   const nextFmp = <T>(fallback: T): T =>
     fmpResults[fmpIdx] && fmpResults[fmpIdx++].status === "fulfilled"
@@ -491,6 +508,7 @@ export async function getFinancialsSection(symbol: string): Promise<FinancialsSe
     income: edgarIncome.length > 0 ? edgarIncome : nextFmp<IncomeStatement[]>([]),
     balance: edgarBalance.length > 0 ? edgarBalance : nextFmp<BalanceSheetStatement[]>([]),
     cashflow: edgarCashflow.length > 0 ? edgarCashflow : nextFmp<CashFlowStatement[]>([]),
+    debug: Object.keys(debug).length > 0 ? debug : undefined,
   };
 }
 
@@ -510,9 +528,15 @@ export async function getOwnershipSection(symbol: string): Promise<OwnershipSect
   );
   const value = <T>(i: number, fallback: T): T =>
     results[i].status === "fulfilled" ? ((results[i] as PromiseFulfilledResult<T>).value ?? fallback) : fallback;
+  const debug: Record<string, string> = {};
+  ["institutionalHolders", "insiderTrades"].forEach((label, i) => {
+    const msg = errMsg(results[i]);
+    if (msg) debug[label] = msg;
+  });
   return {
     institutionalHolders: value<InstitutionalHolder[]>(0, []),
     insiderTrades: value<InsiderTrade[]>(1, []),
+    debug: Object.keys(debug).length > 0 ? debug : undefined,
   };
 }
 

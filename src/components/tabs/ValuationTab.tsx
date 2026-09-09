@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import type { CoreStockData, Quote } from "@/lib/types";
 import FinancialTable from "@/components/FinancialTable";
+import DebugPanel from "@/components/DebugPanel";
 import { keyMetricsRows, ratioRows } from "@/lib/tableRows";
 import { formatCompact, formatCurrency } from "@/lib/format";
 import { useLanguage } from "@/lib/i18n";
@@ -75,6 +76,7 @@ export default function ValuationTab({ data }: { data: CoreStockData }) {
   const { t } = useLanguage();
   return (
     <div className="flex flex-col gap-4">
+      <DebugPanel debug={data.debug} />
       <div className="card">
         <div className="border-b p-4">
           <h3 className="font-medium">{t("valuationProfitability")}</h3>
