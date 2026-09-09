@@ -1,12 +1,13 @@
 import type { BalanceSheetStatement, CashFlowStatement, IncomeStatement } from "./types";
 
-// SEC EDGAR's XBRL API: official, free, and effectively unlimited (SEC
-// only asks for a descriptive User-Agent and a reasonable request rate).
-// Used as the primary source for US-listed companies' financial
-// statements so the Financials tab doesn't depend on FMP's 250/day quota.
-// Foreign filers, ETFs, and anything EDGAR doesn't cover fall back to FMP.
-const UA = process.env.SEC_EDGAR_USER_AGENT || "SearchMarkets research-tool (github.com)";
-const HEADERS = { "User-Agent": UA, Accept: "application/json" };
+// SEC EDGAR's XBRL API: official, free, and effectively unlimited — but
+// SEC's fair-access policy (sec.gov/os/webmaster-faq#developers) actively
+// 403s requests whose User-Agent doesn't match their expected
+// "Company Name AdminContact@domain.com" shape. Set SEC_EDGAR_USER_AGENT
+// to your own contact info for best reliability; this default is enough
+// to pass their format check either way.
+const UA = process.env.SEC_EDGAR_USER_AGENT || "SearchMarkets contact@searchmarkets.app";
+const HEADERS = { "User-Agent": UA, Accept: "application/json", "Accept-Encoding": "gzip, deflate" };
 
 interface TickerEntry {
   cik_str: number;
