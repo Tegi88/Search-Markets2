@@ -34,6 +34,7 @@ import {
   getEdgarIncomeStatement,
   getEdgarRatiosAndMetrics,
 } from "./edgar";
+import { getEdgarInsiderTrades } from "./edgarInsiders";
 
 // FMP retired the legacy /api/v3 and /api/v4 endpoints on 2025-08-31.
 // Every request now goes through the "stable" API, which uses query
@@ -562,20 +563,38 @@ export async function getDividendsSection(symbol: string): Promise<DividendsSect
 
 export async function getOwnershipSection(symbol: string): Promise<OwnershipSection> {
   const sym = symbol.toUpperCase();
-  const results = await runLimited(
-    [() => getInstitutionalHolders(sym), () => getInsiderTrades(sym)],
-    2
-  );
-  const value = <T>(i: number, fallback: T): T =>
-    results[i].status === "fulfilled" ? ((results[i] as PromiseFulfilledResult<T>).value ?? fallback) : fallback;
   const debug: Record<string, string> = {};
-  ["institutionalHolders", "insiderTrades"].forEach((label, i) => {
-    const msg = errMsg(results[i]);
-    if (msg) debug[label] = msg;
-  });
+
+  // FMP's free plan permanently 402s /institutional-ownership — no free,
+  // per-ticker equivalent exists (13F data is filed per-institution, not
+  // per-company), so this stays FMP-only and just surfaces why it's empty.
+  const holdersResult = await runLimited([() => getInstitutionalHolders(sym)], 1);
+  const institutionalHolders =
+    holdersResult[0].status === "fulfilled"
+      ? (holdersResult[0] as PromiseFulfilledResult<InstitutionalHolder[]>).value ?? []
+      : [];
+  const holdersMsg = errMsg(holdersResult[0]);
+  if (holdersMsg) debug.institutionalHolders = holdersMsg;
+
+  // Insider trades: SEC Form 4 filings, parsed directly — free and not
+  // subject to FMP's plan restriction on /insider-trading.
+  let insiderTrades: InsiderTrade[] = [];
+  try {
+    insiderTrades = await getEdgarInsiderTrades(sym);
+  } catch (err) {
+    debug.edgarInsiderTrades = err instanceof Error ? err.message : String(err);
+  }
+  if (insiderTrades.length === 0) {
+    try {
+      insiderTrades = await getInsiderTrades(sym);
+    } catch (err) {
+      debug.insiderTrades = err instanceof Error ? err.message : String(err);
+    }
+  }
+
   return {
-    institutionalHolders: value<InstitutionalHolder[]>(0, []),
-    insiderTrades: value<InsiderTrade[]>(1, []),
+    institutionalHolders,
+    insiderTrades,
     debug: Object.keys(debug).length > 0 ? debug : undefined,
   };
 }

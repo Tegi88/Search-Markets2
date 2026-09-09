@@ -14,8 +14,8 @@ import type {
 // "Company Name AdminContact@domain.com" shape. Set SEC_EDGAR_USER_AGENT
 // to your own contact info for best reliability; this default is enough
 // to pass their format check either way.
-const UA = process.env.SEC_EDGAR_USER_AGENT || "SearchMarkets contact@searchmarkets.app";
-const HEADERS = { "User-Agent": UA, Accept: "application/json", "Accept-Encoding": "gzip, deflate" };
+export const EDGAR_UA = process.env.SEC_EDGAR_USER_AGENT || "SearchMarkets contact@searchmarkets.app";
+const HEADERS = { "User-Agent": EDGAR_UA, Accept: "application/json", "Accept-Encoding": "gzip, deflate" };
 
 interface TickerEntry {
   cik_str: number;
