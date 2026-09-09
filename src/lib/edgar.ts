@@ -21,12 +21,16 @@ async function loadCikMap(): Promise<Map<string, string>> {
     headers: HEADERS,
     next: { revalidate: 86400 },
   });
-  if (!res.ok) return new Map();
+  if (!res.ok) {
+    console.error(`[edgar] company_tickers.json failed: ${res.status} ${res.statusText}`);
+    return new Map();
+  }
   const json = (await res.json()) as Record<string, TickerEntry>;
   const map = new Map<string, string>();
   for (const entry of Object.values(json)) {
     map.set(entry.ticker.toUpperCase(), String(entry.cik_str).padStart(10, "0"));
   }
+  console.error(`[edgar] loaded ${map.size} tickers from SEC`);
   return map;
 }
 
@@ -34,8 +38,11 @@ export async function getCik(symbol: string): Promise<string | null> {
   try {
     if (!cikMapPromise) cikMapPromise = loadCikMap();
     const map = await cikMapPromise;
-    return map.get(symbol.toUpperCase()) ?? null;
-  } catch {
+    const cik = map.get(symbol.toUpperCase()) ?? null;
+    if (!cik) console.error(`[edgar] no CIK found for ${symbol} (map size ${map.size})`);
+    return cik;
+  } catch (err) {
+    console.error(`[edgar] getCik(${symbol}) threw:`, err);
     return null;
   }
 }
@@ -66,8 +73,17 @@ async function loadCompanyFacts(cik: string): Promise<CompanyFacts | null> {
         headers: HEADERS,
         next: { revalidate: 86400 },
       })
-        .then((res) => (res.ok ? res.json() : null))
-        .catch(() => null)
+        .then((res) => {
+          if (!res.ok) {
+            console.error(`[edgar] companyfacts CIK${cik} failed: ${res.status} ${res.statusText}`);
+            return null;
+          }
+          return res.json();
+        })
+        .catch((err) => {
+          console.error(`[edgar] companyfacts CIK${cik} threw:`, err);
+          return null;
+        })
     );
   }
   return factsCache.get(cik)!;

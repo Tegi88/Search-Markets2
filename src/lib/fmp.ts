@@ -54,7 +54,9 @@ async function get<T>(url: string, revalidateSeconds = 300): Promise<T> {
     } catch {
       // ignore
     }
-    throw new Error(`FMP request failed (${res.status}): ${url.split("apikey=")[0]}... ${detail}`);
+    const message = `FMP request failed (${res.status}): ${url.split("apikey=")[0]}... ${detail}`;
+    console.error(`[fmp] ${message}`);
+    throw new Error(message);
   }
   return res.json() as Promise<T>;
 }
@@ -469,6 +471,9 @@ export async function getFinancialsSection(symbol: string): Promise<FinancialsSe
     getEdgarBalanceSheet(sym).catch(() => []),
     getEdgarCashFlow(sym).catch(() => []),
   ]);
+  console.error(
+    `[financials] ${sym} EDGAR rows — income:${edgarIncome.length} balance:${edgarBalance.length} cashflow:${edgarCashflow.length}`
+  );
 
   const needsFmp: (() => Promise<unknown>)[] = [];
   if (edgarIncome.length === 0) needsFmp.push(() => getIncomeStatement(sym, "annual"));
