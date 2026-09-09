@@ -91,6 +91,33 @@ function parseForm4(xml: string, symbol: string, filingDate: string): InsiderTra
   return trades;
 }
 
+interface DirectoryListing {
+  directory?: { item?: { name: string }[] };
+}
+
+/** submissions.json's `primaryDocument` field is sometimes a viewer path
+ * (e.g. "xslF345X05/primary_doc.xml") that doesn't resolve directly under
+ * Archives — SEC's own per-filing directory listing is authoritative, so
+ * use it to find the real raw XML filename instead of guessing. */
+async function resolveXmlFilename(
+  cikNoZeros: number,
+  accNoDashes: string,
+  fallback: string
+): Promise<{ filename: string; note?: string }> {
+  const indexUrl = `https://www.sec.gov/Archives/edgar/data/${cikNoZeros}/${accNoDashes}/index.json`;
+  try {
+    const res = await fetch(indexUrl, { headers: JSON_HEADERS, next: { revalidate: 86400 } });
+    if (!res.ok) return { filename: fallback, note: `index.json ${res.status}` };
+    const idx: DirectoryListing = await res.json();
+    const files = idx.directory?.item ?? [];
+    const xmlFile = files.find((f) => /\.xml$/i.test(f.name) && !/^xsl/i.test(f.name));
+    if (xmlFile) return { filename: xmlFile.name };
+    return { filename: fallback, note: `no bare .xml in index.json (${files.map((f) => f.name).join(", ")})` };
+  } catch (err) {
+    return { filename: fallback, note: `index.json fetch threw: ${err instanceof Error ? err.message : String(err)}` };
+  }
+}
+
 async function fetchAndParseForm4(
   cikNum: string,
   accessionNumber: string,
@@ -99,13 +126,15 @@ async function fetchAndParseForm4(
   symbol: string
 ): Promise<{ trades: InsiderTrade[]; error?: string }> {
   const accNoDashes = accessionNumber.replace(/-/g, "");
-  const url = `https://www.sec.gov/Archives/edgar/data/${Number(cikNum)}/${accNoDashes}/${primaryDocument}`;
+  const cikNoZeros = Number(cikNum);
+  const { filename, note } = await resolveXmlFilename(cikNoZeros, accNoDashes, primaryDocument);
+  const url = `https://www.sec.gov/Archives/edgar/data/${cikNoZeros}/${accNoDashes}/${filename}`;
   try {
     const res = await fetch(url, { headers: XML_HEADERS, next: { revalidate: 86400 } });
-    if (!res.ok) return { trades: [], error: `${res.status} fetching ${url}` };
+    if (!res.ok) return { trades: [], error: `${res.status} fetching ${url}${note ? ` [${note}]` : ""}` };
     const xml = await res.text();
     if (!xml.includes("nonDerivativeTransaction") && !xml.includes("ownershipDocument")) {
-      return { trades: [], error: `unrecognized document shape at ${url}` };
+      return { trades: [], error: `unrecognized document shape at ${url}${note ? ` [${note}]` : ""}` };
     }
     return { trades: parseForm4(xml, symbol, filingDate) };
   } catch (err) {
