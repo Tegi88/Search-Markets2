@@ -1,0 +1,243 @@
+import type { BalanceSheetStatement, CashFlowStatement, IncomeStatement } from "./types";
+
+// SEC EDGAR's XBRL API: official, free, and effectively unlimited (SEC
+// only asks for a descriptive User-Agent and a reasonable request rate).
+// Used as the primary source for US-listed companies' financial
+// statements so the Financials tab doesn't depend on FMP's 250/day quota.
+// Foreign filers, ETFs, and anything EDGAR doesn't cover fall back to FMP.
+const UA = process.env.SEC_EDGAR_USER_AGENT || "SearchMarkets research-tool (github.com)";
+const HEADERS = { "User-Agent": UA, Accept: "application/json" };
+
+interface TickerEntry {
+  cik_str: number;
+  ticker: string;
+  title: string;
+}
+
+let cikMapPromise: Promise<Map<string, string>> | null = null;
+
+async function loadCikMap(): Promise<Map<string, string>> {
+  const res = await fetch("https://www.sec.gov/files/company_tickers.json", {
+    headers: HEADERS,
+    next: { revalidate: 86400 },
+  });
+  if (!res.ok) return new Map();
+  const json = (await res.json()) as Record<string, TickerEntry>;
+  const map = new Map<string, string>();
+  for (const entry of Object.values(json)) {
+    map.set(entry.ticker.toUpperCase(), String(entry.cik_str).padStart(10, "0"));
+  }
+  return map;
+}
+
+export async function getCik(symbol: string): Promise<string | null> {
+  try {
+    if (!cikMapPromise) cikMapPromise = loadCikMap();
+    const map = await cikMapPromise;
+    return map.get(symbol.toUpperCase()) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+interface XbrlFact {
+  end: string;
+  start?: string;
+  val: number;
+  fy: number;
+  fp: string;
+  form: string;
+  filed: string;
+}
+
+interface CompanyFacts {
+  facts?: {
+    "us-gaap"?: Record<string, { units: Record<string, XbrlFact[]> }>;
+  };
+}
+
+const factsCache = new Map<string, Promise<CompanyFacts | null>>();
+
+async function loadCompanyFacts(cik: string): Promise<CompanyFacts | null> {
+  if (!factsCache.has(cik)) {
+    factsCache.set(
+      cik,
+      fetch(`https://data.sec.gov/api/xbrl/companyfacts/CIK${cik}.json`, {
+        headers: HEADERS,
+        next: { revalidate: 86400 },
+      })
+        .then((res) => (res.ok ? res.json() : null))
+        .catch(() => null)
+    );
+  }
+  return factsCache.get(cik)!;
+}
+
+/** Picks the first concept (from most to least preferred) that has annual
+ * (10-K, full fiscal year) data, and returns one value per fiscal year —
+ * the most recently filed value when a year was restated. */
+function extractAnnual(facts: CompanyFacts, concepts: string[]): Map<number, { date: string; val: number }> {
+  const byYear = new Map<number, { date: string; val: number; filed: string }>();
+  for (const concept of concepts) {
+    const units = facts.facts?.["us-gaap"]?.[concept]?.units;
+    if (!units) continue;
+    const series = units.USD || units["USD/shares"] || units.shares || Object.values(units)[0];
+    if (!series) continue;
+    for (const f of series) {
+      if (!f.form?.startsWith("10-K")) continue;
+      if (f.fp !== "FY") continue;
+      const existing = byYear.get(f.fy);
+      if (!existing || f.filed > existing.filed) {
+        byYear.set(f.fy, { date: f.end, val: f.val, filed: f.filed });
+      }
+    }
+    if (byYear.size > 0) break; // found data under this concept name, don't dilute with a less-preferred alias
+  }
+  const result = new Map<number, { date: string; val: number }>();
+  for (const [fy, v] of byYear) result.set(fy, { date: v.date, val: v.val });
+  return result;
+}
+
+function mergeByYear(
+  fields: Record<string, Map<number, { date: string; val: number }>>
+): Record<string, unknown>[] {
+  const years = new Set<number>();
+  for (const m of Object.values(fields)) for (const fy of m.keys()) years.add(fy);
+  const sortedYears = [...years].sort((a, b) => b - a).slice(0, 10);
+
+  return sortedYears.map((fy) => {
+    let date = "";
+    const row: Record<string, unknown> = {};
+    for (const [key, m] of Object.entries(fields)) {
+      const entry = m.get(fy);
+      if (entry) {
+        row[key] = entry.val;
+        if (!date || entry.date > date) date = entry.date;
+      }
+    }
+    row.date = date;
+    row.period = "FY";
+    row.fiscalYear = String(fy);
+    return row;
+  });
+}
+
+export async function getEdgarIncomeStatement(symbol: string): Promise<IncomeStatement[]> {
+  const cik = await getCik(symbol);
+  if (!cik) return [];
+  const facts = await loadCompanyFacts(cik);
+  if (!facts) return [];
+
+  const rows = mergeByYear({
+    revenue: extractAnnual(facts, [
+      "Revenues",
+      "RevenueFromContractWithCustomerExcludingAssessedTax",
+      "RevenueFromContractWithCustomerIncludingAssessedTax",
+      "SalesRevenueNet",
+    ]),
+    costOfRevenue: extractAnnual(facts, ["CostOfRevenue", "CostOfGoodsAndServicesSold", "CostOfGoodsSold"]),
+    grossProfit: extractAnnual(facts, ["GrossProfit"]),
+    researchAndDevelopmentExpenses: extractAnnual(facts, ["ResearchAndDevelopmentExpense"]),
+    sellingGeneralAndAdministrativeExpenses: extractAnnual(facts, [
+      "SellingGeneralAndAdministrativeExpense",
+      "GeneralAndAdministrativeExpense",
+    ]),
+    operatingIncome: extractAnnual(facts, ["OperatingIncomeLoss"]),
+    interestExpense: extractAnnual(facts, ["InterestExpense", "InterestExpenseDebt"]),
+    incomeTaxExpense: extractAnnual(facts, ["IncomeTaxExpenseBenefit"]),
+    netIncome: extractAnnual(facts, ["NetIncomeLoss", "ProfitLoss"]),
+    eps: extractAnnual(facts, ["EarningsPerShareBasic"]),
+    epsDiluted: extractAnnual(facts, ["EarningsPerShareDiluted"]),
+    weightedAverageShsOut: extractAnnual(facts, [
+      "WeightedAverageNumberOfSharesOutstandingBasic",
+      "WeightedAverageNumberOfDilutedSharesOutstanding",
+    ]),
+    depreciationAndAmortization: extractAnnual(facts, [
+      "DepreciationDepletionAndAmortization",
+      "DepreciationAmortizationAndAccretionNet",
+      "DepreciationAndAmortization",
+    ]),
+  }) as unknown as (IncomeStatement & { depreciationAndAmortization?: number })[];
+
+  for (const row of rows) {
+    if (row.grossProfit === undefined && row.revenue !== undefined && row.costOfRevenue !== undefined) {
+      row.grossProfit = row.revenue - row.costOfRevenue;
+    }
+    if (row.operatingIncome !== undefined && row.depreciationAndAmortization !== undefined) {
+      row.ebitda = row.operatingIncome + row.depreciationAndAmortization;
+    }
+  }
+
+  return rows.filter((r) => r.revenue !== undefined || r.netIncome !== undefined);
+}
+
+export async function getEdgarBalanceSheet(symbol: string): Promise<BalanceSheetStatement[]> {
+  const cik = await getCik(symbol);
+  if (!cik) return [];
+  const facts = await loadCompanyFacts(cik);
+  if (!facts) return [];
+
+  const rows = mergeByYear({
+    cashAndCashEquivalents: extractAnnual(facts, [
+      "CashAndCashEquivalentsAtCarryingValue",
+      "CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents",
+    ]),
+    totalCurrentAssets: extractAnnual(facts, ["AssetsCurrent"]),
+    totalAssets: extractAnnual(facts, ["Assets"]),
+    totalCurrentLiabilities: extractAnnual(facts, ["LiabilitiesCurrent"]),
+    longTermDebt: extractAnnual(facts, ["LongTermDebtNoncurrent", "LongTermDebt"]),
+    totalLiabilities: extractAnnual(facts, ["Liabilities"]),
+    retainedEarnings: extractAnnual(facts, ["RetainedEarningsAccumulatedDeficit"]),
+    totalStockholdersEquity: extractAnnual(facts, [
+      "StockholdersEquity",
+      "StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest",
+    ]),
+  }) as unknown as BalanceSheetStatement[];
+
+  return rows.filter((r) => r.totalAssets !== undefined);
+}
+
+export async function getEdgarCashFlow(symbol: string): Promise<CashFlowStatement[]> {
+  const cik = await getCik(symbol);
+  if (!cik) return [];
+  const facts = await loadCompanyFacts(cik);
+  if (!facts) return [];
+
+  const rows = mergeByYear({
+    netIncome: extractAnnual(facts, ["NetIncomeLoss", "ProfitLoss"]),
+    depreciationAndAmortization: extractAnnual(facts, [
+      "DepreciationDepletionAndAmortization",
+      "DepreciationAmortizationAndAccretionNet",
+    ]),
+    netCashProvidedByOperatingActivities: extractAnnual(facts, [
+      "NetCashProvidedByUsedInOperatingActivities",
+      "NetCashProvidedByUsedInOperatingActivitiesContinuingOperations",
+    ]),
+    capitalExpenditure: extractAnnual(facts, [
+      "PaymentsToAcquirePropertyPlantAndEquipment",
+      "PaymentsToAcquireProductiveAssets",
+    ]),
+    netCashUsedForInvestingActivites: extractAnnual(facts, [
+      "NetCashProvidedByUsedInInvestingActivities",
+      "NetCashProvidedByUsedInInvestingActivitiesContinuingOperations",
+    ]),
+    netCashUsedProvidedByFinancingActivities: extractAnnual(facts, [
+      "NetCashProvidedByUsedInFinancingActivities",
+      "NetCashProvidedByUsedInFinancingActivitiesContinuingOperations",
+    ]),
+    dividendsPaid: extractAnnual(facts, ["PaymentsOfDividends", "PaymentsOfDividendsCommonStock"]),
+    commonStockRepurchased: extractAnnual(facts, ["PaymentsForRepurchaseOfCommonStock"]),
+  }) as unknown as CashFlowStatement[];
+
+  for (const row of rows) {
+    // Capex is reported as a positive outflow amount by most filers.
+    if (row.capitalExpenditure !== undefined && row.capitalExpenditure > 0) {
+      row.capitalExpenditure = -row.capitalExpenditure;
+    }
+    if (row.netCashProvidedByOperatingActivities !== undefined && row.capitalExpenditure !== undefined) {
+      row.freeCashFlow = row.netCashProvidedByOperatingActivities + row.capitalExpenditure;
+    }
+  }
+
+  return rows.filter((r) => r.netCashProvidedByOperatingActivities !== undefined);
+}

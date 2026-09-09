@@ -10,9 +10,9 @@ import type {
 import type { TableRowConfig } from "@/components/FinancialTable";
 
 const ratioOf = (num: keyof IncomeStatement, den: keyof IncomeStatement) => (row: IncomeStatement) => {
-  const n = row[num] as number;
-  const d = row[den] as number;
-  return d ? n / d : undefined;
+  const n = row[num] as number | undefined;
+  const d = row[den] as number | undefined;
+  return n !== undefined && d ? n / d : undefined;
 };
 
 export const incomeRows: TableRowConfig<IncomeStatement>[] = [

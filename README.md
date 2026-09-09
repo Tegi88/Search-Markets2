@@ -49,9 +49,30 @@ activity, analyst estimates, and news — for any publicly traded company.
 - **Watchlist** — saved locally in your browser.
 - **Compare** — side-by-side comparison of any set of tickers.
 
+## Data sources
+
+To stay well within Financial Modeling Prep's free 250-requests/day quota,
+each type of data is fetched from whichever free source covers it without a
+key or a tight cap, falling back to FMP only when needed:
+
+| Data | Primary source | Fallback |
+| --- | --- | --- |
+| Price history chart | Yahoo Finance (unofficial) | Stooq → FMP |
+| Financial statements (US tickers) | SEC EDGAR (official, free, unlimited) | FMP |
+| Quote (price/change/volume/ranges) | FMP | Yahoo Finance |
+| Ratios, key metrics, growth, estimates, ownership, insiders, news, rating | FMP | — |
+
+Yahoo's endpoint is unofficial and undocumented — it has no daily cap but
+also no guarantee it keeps working. SEC EDGAR only covers US-listed filers;
+everything else (ETFs, funds, foreign tickers) falls back to FMP.
+
+Each stock page also loads lazily: the header, overview, and valuation tabs
+load on open (a handful of requests), while Financials, Growth, Dividends,
+Ownership, Analyst Estimates, and News each fetch their own data only the
+first time you click into that tab.
+
 ## Tech stack
 
-Next.js (App Router) + TypeScript + Tailwind CSS + Recharts, backed by the
-Financial Modeling Prep REST API.
+Next.js (App Router) + TypeScript + Tailwind CSS + Recharts.
 
 This is a research tool for personal/educational use — not investment advice.

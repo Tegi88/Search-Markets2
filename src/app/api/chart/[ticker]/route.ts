@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getHistoricalPrices } from "@/lib/fmp";
+import { getYahooHistoricalPrices } from "@/lib/yahoo";
+import { getStooqHistoricalPrices } from "@/lib/stooq";
 
 function fromDateForRange(range: string): string | undefined {
   const now = new Date();
@@ -32,11 +34,25 @@ export async function GET(
   const { ticker } = await params;
   const range = req.nextUrl.searchParams.get("range") ?? "1Y";
   const from = fromDateForRange(range);
-  try {
-    const prices = await getHistoricalPrices(ticker, from ? { from } : {});
-    return NextResponse.json({ prices });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown error";
-    return NextResponse.json({ prices: [], error: message }, { status: 502 });
+
+  // Yahoo and Stooq are free with no meaningful daily cap, so they carry
+  // the price chart; FMP (quota-limited) is only a last resort.
+  let prices = await getYahooHistoricalPrices(ticker, range);
+  let source = "yahoo";
+
+  if (prices.length === 0) {
+    prices = await getStooqHistoricalPrices(ticker, from ? { from } : {});
+    source = "stooq";
   }
+
+  if (prices.length === 0) {
+    try {
+      prices = await getHistoricalPrices(ticker, from ? { from } : {});
+      source = "fmp";
+    } catch {
+      // fall through with empty prices
+    }
+  }
+
+  return NextResponse.json({ prices, source });
 }

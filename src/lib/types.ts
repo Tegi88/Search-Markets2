@@ -72,59 +72,62 @@ export interface HistoricalPrice {
   volume: number;
 }
 
+// Numeric fields are optional: FMP's free plan always fills them in, but
+// the SEC EDGAR source (used first for US tickers) only reports whatever
+// concepts a given company actually tagged in its filings.
 export interface IncomeStatement {
   date: string;
   period: string;
   fiscalYear?: string;
-  revenue: number;
-  costOfRevenue: number;
-  grossProfit: number;
-  researchAndDevelopmentExpenses: number;
-  sellingGeneralAndAdministrativeExpenses: number;
-  operatingExpenses: number;
-  operatingIncome: number;
-  interestExpense: number;
-  ebitda: number;
-  netIncome: number;
-  eps: number;
-  epsDiluted: number;
-  weightedAverageShsOut: number;
-  incomeTaxExpense: number;
+  revenue?: number;
+  costOfRevenue?: number;
+  grossProfit?: number;
+  researchAndDevelopmentExpenses?: number;
+  sellingGeneralAndAdministrativeExpenses?: number;
+  operatingExpenses?: number;
+  operatingIncome?: number;
+  interestExpense?: number;
+  ebitda?: number;
+  netIncome?: number;
+  eps?: number;
+  epsDiluted?: number;
+  weightedAverageShsOut?: number;
+  incomeTaxExpense?: number;
 }
 
 export interface BalanceSheetStatement {
   date: string;
   period: string;
   calendarYear?: string;
-  cashAndCashEquivalents: number;
-  totalCurrentAssets: number;
-  propertyPlantEquipmentNet: number;
-  goodwillAndIntangibleAssets: number;
-  totalAssets: number;
-  totalCurrentLiabilities: number;
-  longTermDebt: number;
-  totalLiabilities: number;
-  retainedEarnings: number;
-  totalStockholdersEquity: number;
-  totalDebt: number;
-  netDebt: number;
+  cashAndCashEquivalents?: number;
+  totalCurrentAssets?: number;
+  propertyPlantEquipmentNet?: number;
+  goodwillAndIntangibleAssets?: number;
+  totalAssets?: number;
+  totalCurrentLiabilities?: number;
+  longTermDebt?: number;
+  totalLiabilities?: number;
+  retainedEarnings?: number;
+  totalStockholdersEquity?: number;
+  totalDebt?: number;
+  netDebt?: number;
 }
 
 export interface CashFlowStatement {
   date: string;
   period: string;
   calendarYear?: string;
-  netIncome: number;
-  depreciationAndAmortization: number;
-  changeInWorkingCapital: number;
-  netCashProvidedByOperatingActivities: number;
-  capitalExpenditure: number;
-  netCashUsedForInvestingActivites: number;
-  debtRepayment: number;
-  commonStockRepurchased: number;
-  dividendsPaid: number;
-  netCashUsedProvidedByFinancingActivities: number;
-  freeCashFlow: number;
+  netIncome?: number;
+  depreciationAndAmortization?: number;
+  changeInWorkingCapital?: number;
+  netCashProvidedByOperatingActivities?: number;
+  capitalExpenditure?: number;
+  netCashUsedForInvestingActivites?: number;
+  debtRepayment?: number;
+  commonStockRepurchased?: number;
+  dividendsPaid?: number;
+  netCashUsedProvidedByFinancingActivities?: number;
+  freeCashFlow?: number;
 }
 
 export interface RatiosTTM {
@@ -295,7 +298,6 @@ export type SectionName = "financials" | "growth" | "dividends" | "ownership" | 
 
 export interface FinancialsSection {
   income: IncomeStatement[];
-  incomeQuarterly: IncomeStatement[];
   balance: BalanceSheetStatement[];
   cashflow: CashFlowStatement[];
 }

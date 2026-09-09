@@ -26,6 +26,8 @@ import type {
   SectionName,
   UpgradeDowngrade,
 } from "./types";
+import { getYahooQuote } from "./yahoo";
+import { getEdgarBalanceSheet, getEdgarCashFlow, getEdgarIncomeStatement } from "./edgar";
 
 // FMP retired the legacy /api/v3 and /api/v4 endpoints on 2025-08-31.
 // Every request now goes through the "stable" API, which uses query
@@ -376,8 +378,68 @@ export async function getCoreStockData(symbol: string): Promise<CoreStockData> {
   const value = <T>(i: number, fallback: T): T =>
     results[i].status === "fulfilled" ? ((results[i] as PromiseFulfilledResult<T>).value ?? fallback) : fallback;
 
-  const quote = value<Quote | null>(1, null);
+  let quote = value<Quote | null>(1, null);
   const ratios = value<Ratio[]>(2, []);
+  let profile = value<CompanyProfile | null>(0, null);
+
+  // FMP's free plan is quota-limited (250 req/day) — if quote and/or
+  // profile were throttled or errored, fall back to Yahoo's free,
+  // unofficial endpoint rather than showing a blank/missing header.
+  if (!quote || !quote.avgVolume || !profile) {
+    const yq = await getYahooQuote(sym).catch(() => null);
+    if (yq && yq.price) {
+      if (!quote) {
+        quote = {
+          symbol: sym,
+          name: yq.name ?? profile?.companyName ?? sym,
+          price: yq.price,
+          change: yq.previousClose ? yq.price - yq.previousClose : 0,
+          changesPercentage: yq.previousClose ? ((yq.price - yq.previousClose) / yq.previousClose) * 100 : 0,
+          dayLow: yq.dayLow ?? 0,
+          dayHigh: yq.dayHigh ?? 0,
+          yearLow: yq.yearLow ?? 0,
+          yearHigh: yq.yearHigh ?? 0,
+          marketCap: yq.marketCap ?? profile?.mktCap ?? 0,
+          priceAvg50: 0,
+          priceAvg200: 0,
+          volume: yq.volume ?? 0,
+          avgVolume: yq.avgVolume,
+          open: yq.price,
+          previousClose: yq.previousClose ?? 0,
+          exchange: yq.exchange,
+        };
+      } else if (!quote.avgVolume) {
+        quote.avgVolume = yq.avgVolume;
+      }
+
+      if (!profile) {
+        // Bare-bones stand-in so the page can render while FMP's profile
+        // endpoint is out of quota — no description/sector/logo available.
+        profile = {
+          symbol: sym,
+          companyName: yq.name ?? sym,
+          price: yq.price,
+          changes: quote.change,
+          changesPercentage: quote.changesPercentage,
+          currency: yq.currency ?? "USD",
+          exchangeShortName: yq.exchange ?? "",
+          industry: "",
+          sector: "",
+          country: "",
+          website: "",
+          description: "",
+          ceo: "",
+          fullTimeEmployees: "",
+          image: "",
+          ipoDate: "",
+          mktCap: yq.marketCap ?? 0,
+          beta: 0,
+          volAvg: yq.avgVolume ?? 0,
+          range: yq.yearLow && yq.yearHigh ? `${yq.yearLow}-${yq.yearHigh}` : "",
+        };
+      }
+    }
+  }
 
   // The free-plan quote endpoint doesn't return trailing EPS/P·E — derive
   // a rough trailing P/E from the latest annual ratios if it's missing.
@@ -387,7 +449,7 @@ export async function getCoreStockData(symbol: string): Promise<CoreStockData> {
 
   return {
     symbol: sym,
-    profile: value<CompanyProfile | null>(0, null),
+    profile,
     quote,
     ratios,
     keyMetrics: value<KeyMetrics[]>(3, []),
@@ -398,22 +460,32 @@ export async function getCoreStockData(symbol: string): Promise<CoreStockData> {
 
 export async function getFinancialsSection(symbol: string): Promise<FinancialsSection> {
   const sym = symbol.toUpperCase();
-  const results = await runLimited(
-    [
-      () => getIncomeStatement(sym, "annual"),
-      () => getIncomeStatement(sym, "quarter", 8),
-      () => getBalanceSheet(sym, "annual"),
-      () => getCashFlow(sym, "annual"),
-    ],
-    2
-  );
-  const value = <T>(i: number, fallback: T): T =>
-    results[i].status === "fulfilled" ? ((results[i] as PromiseFulfilledResult<T>).value ?? fallback) : fallback;
+
+  // SEC EDGAR (official, free, unlimited) is the primary source for US
+  // tickers — it shares one cached CIK lookup + company-facts fetch across
+  // all three statements, so this costs zero FMP quota when it succeeds.
+  const [edgarIncome, edgarBalance, edgarCashflow] = await Promise.all([
+    getEdgarIncomeStatement(sym).catch(() => []),
+    getEdgarBalanceSheet(sym).catch(() => []),
+    getEdgarCashFlow(sym).catch(() => []),
+  ]);
+
+  const needsFmp: (() => Promise<unknown>)[] = [];
+  if (edgarIncome.length === 0) needsFmp.push(() => getIncomeStatement(sym, "annual"));
+  if (edgarBalance.length === 0) needsFmp.push(() => getBalanceSheet(sym, "annual"));
+  if (edgarCashflow.length === 0) needsFmp.push(() => getCashFlow(sym, "annual"));
+
+  const fmpResults = needsFmp.length > 0 ? await runLimited(needsFmp, 2) : [];
+  let fmpIdx = 0;
+  const nextFmp = <T>(fallback: T): T =>
+    fmpResults[fmpIdx] && fmpResults[fmpIdx++].status === "fulfilled"
+      ? ((fmpResults[fmpIdx - 1] as PromiseFulfilledResult<T>).value ?? fallback)
+      : fallback;
+
   return {
-    income: value<IncomeStatement[]>(0, []),
-    incomeQuarterly: value<IncomeStatement[]>(1, []),
-    balance: value<BalanceSheetStatement[]>(2, []),
-    cashflow: value<CashFlowStatement[]>(3, []),
+    income: edgarIncome.length > 0 ? edgarIncome : nextFmp<IncomeStatement[]>([]),
+    balance: edgarBalance.length > 0 ? edgarBalance : nextFmp<BalanceSheetStatement[]>([]),
+    cashflow: edgarCashflow.length > 0 ? edgarCashflow : nextFmp<CashFlowStatement[]>([]),
   };
 }
 
