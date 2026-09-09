@@ -27,7 +27,13 @@ import type {
   UpgradeDowngrade,
 } from "./types";
 import { getYahooQuote } from "./yahoo";
-import { getEdgarBalanceSheet, getEdgarCashFlow, getEdgarIncomeStatement } from "./edgar";
+import {
+  getEdgarBalanceSheet,
+  getEdgarCashFlow,
+  getEdgarGrowth,
+  getEdgarIncomeStatement,
+  getEdgarRatiosAndMetrics,
+} from "./edgar";
 
 // FMP retired the legacy /api/v3 and /api/v4 endpoints on 2025-08-31.
 // Every request now goes through the "stable" API, which uses query
@@ -359,14 +365,7 @@ export async function getCoreStockData(symbol: string): Promise<CoreStockData> {
   const sym = symbol.toUpperCase();
 
   const results = await runLimited(
-    [
-      () => getProfile(sym),
-      () => getQuote(sym),
-      () => getRatios(sym, "annual"),
-      () => getKeyMetrics(sym, "annual"),
-      () => getRating(sym),
-      () => getPeers(sym),
-    ],
+    [() => getProfile(sym), () => getQuote(sym), () => getRating(sym), () => getPeers(sym)],
     3
   );
 
@@ -374,7 +373,6 @@ export async function getCoreStockData(symbol: string): Promise<CoreStockData> {
     results[i].status === "fulfilled" ? ((results[i] as PromiseFulfilledResult<T>).value ?? fallback) : fallback;
 
   let quote = value<Quote | null>(1, null);
-  const ratios = value<Ratio[]>(2, []);
   let profile = value<CompanyProfile | null>(0, null);
 
   // FMP's free plan is quota-limited (250 req/day) — if quote and/or
@@ -437,26 +435,53 @@ export async function getCoreStockData(symbol: string): Promise<CoreStockData> {
   }
 
   // The free-plan quote endpoint doesn't return trailing EPS/P·E — derive
-  // a rough trailing P/E from the latest annual ratios if it's missing.
-  if (quote && ratios[0] && !quote.eps && ratios[0].priceEarningsRatio) {
-    quote.pe = ratios[0].priceEarningsRatio;
-  }
-
   const debug: Record<string, string> = {};
-  const labels = ["profile", "quote", "ratios", "keyMetrics", "rating", "peers"];
+  const labels = ["profile", "quote", "rating", "peers"];
   results.forEach((r, i) => {
     const msg = errMsg(r);
     if (msg) debug[labels[i]] = msg;
   });
+
+  // FMP's free plan doesn't include /ratios or /key-metrics at all (a
+  // permanent 402, not a quota issue) — compute them from EDGAR's
+  // financials instead, falling back to FMP only if EDGAR has nothing.
+  let ratios: Ratio[] = [];
+  let keyMetrics: KeyMetrics[] = [];
+  try {
+    const edgar = await getEdgarRatiosAndMetrics(sym, quote);
+    ratios = edgar.ratios;
+    keyMetrics = edgar.keyMetrics;
+  } catch (err) {
+    debug.edgarRatios = err instanceof Error ? err.message : String(err);
+  }
+  if (ratios.length === 0) {
+    const fmpResults = await runLimited([() => getRatios(sym, "annual"), () => getKeyMetrics(sym, "annual")], 2);
+    ratios =
+      fmpResults[0].status === "fulfilled" ? (fmpResults[0] as PromiseFulfilledResult<Ratio[]>).value ?? [] : [];
+    keyMetrics =
+      fmpResults[1].status === "fulfilled"
+        ? (fmpResults[1] as PromiseFulfilledResult<KeyMetrics[]>).value ?? []
+        : [];
+    const fmpMsg0 = errMsg(fmpResults[0]);
+    const fmpMsg1 = errMsg(fmpResults[1]);
+    if (fmpMsg0) debug.ratios = fmpMsg0;
+    if (fmpMsg1) debug.keyMetrics = fmpMsg1;
+  }
+
+  // The free-plan quote endpoint doesn't return trailing EPS/P·E — derive
+  // a rough trailing P/E from the latest annual ratios if it's missing.
+  if (quote && ratios[0] && !quote.eps && ratios[0].priceEarningsRatio) {
+    quote.pe = ratios[0].priceEarningsRatio;
+  }
 
   return {
     symbol: sym,
     profile,
     quote,
     ratios,
-    keyMetrics: value<KeyMetrics[]>(3, []),
-    rating: value<CompanyRating | null>(4, null),
-    peers: value<string[]>(5, []),
+    keyMetrics,
+    rating: value<CompanyRating | null>(2, null),
+    peers: value<string[]>(3, []),
     debug: Object.keys(debug).length > 0 ? debug : undefined,
   };
 }
@@ -513,7 +538,22 @@ export async function getFinancialsSection(symbol: string): Promise<FinancialsSe
 }
 
 export async function getGrowthSection(symbol: string): Promise<GrowthSection> {
-  return { growth: await getFinancialGrowth(symbol.toUpperCase(), "annual") };
+  const sym = symbol.toUpperCase();
+  const debug: Record<string, string> = {};
+
+  try {
+    const growth = await getEdgarGrowth(sym);
+    if (growth.length > 0) return { growth };
+  } catch (err) {
+    debug.edgarGrowth = err instanceof Error ? err.message : String(err);
+  }
+
+  try {
+    return { growth: await getFinancialGrowth(sym, "annual") };
+  } catch (err) {
+    debug.growth = err instanceof Error ? err.message : String(err);
+    return { growth: [], debug };
+  }
 }
 
 export async function getDividendsSection(symbol: string): Promise<DividendsSection> {

@@ -1,4 +1,12 @@
-import type { BalanceSheetStatement, CashFlowStatement, IncomeStatement } from "./types";
+import type {
+  BalanceSheetStatement,
+  CashFlowStatement,
+  FinancialGrowth,
+  IncomeStatement,
+  KeyMetrics,
+  Quote,
+  Ratio,
+} from "./types";
 
 // SEC EDGAR's XBRL API: official, free, and effectively unlimited — but
 // SEC's fair-access policy (sec.gov/os/webmaster-faq#developers) actively
@@ -242,4 +250,142 @@ export async function getEdgarCashFlow(symbol: string): Promise<CashFlowStatemen
   }
 
   return rows.filter((r) => r.netCashProvidedByOperatingActivities !== undefined);
+}
+
+const div = (n: number | undefined, d: number | undefined): number =>
+  n !== undefined && d ? n / d : NaN;
+
+/**
+ * FMP's free plan doesn't include /ratios or /key-metrics at all (a
+ * permanent 402, not a quota issue), so these are computed directly from
+ * EDGAR's income statement + balance sheet instead. Margins, ROE/ROA,
+ * leverage, and per-share figures are exact for every year; price-based
+ * ratios (P/E, P/B, EV/EBITDA, ...) only use the *current* quote, so
+ * they're only meaningful for the most recent year — older years show
+ * "—" rather than a ratio computed against today's price.
+ */
+export async function getEdgarRatiosAndMetrics(
+  symbol: string,
+  quote: Quote | null
+): Promise<{ ratios: Ratio[]; keyMetrics: KeyMetrics[] }> {
+  const [income, balance, cashflow] = await Promise.all([
+    getEdgarIncomeStatement(symbol),
+    getEdgarBalanceSheet(symbol),
+    getEdgarCashFlow(symbol),
+  ]);
+  if (income.length === 0 || balance.length === 0) return { ratios: [], keyMetrics: [] };
+
+  const balanceByDate = new Map(balance.map((b) => [b.date, b]));
+  const cashflowByDate = new Map(cashflow.map((c) => [c.date, c]));
+
+  const ratios: Ratio[] = [];
+  const keyMetrics: KeyMetrics[] = [];
+
+  income.forEach((inc, i) => {
+    const bal = balanceByDate.get(inc.date);
+    if (!bal) return;
+    const cf = cashflowByDate.get(inc.date);
+
+    const isLatest = i === 0;
+    const price = isLatest ? quote?.price : undefined;
+    const marketCap = isLatest ? quote?.marketCap : undefined;
+    const totalDebt = bal.longTermDebt;
+    const cash = bal.cashAndCashEquivalents;
+    const enterpriseValue =
+      marketCap !== undefined && totalDebt !== undefined && cash !== undefined
+        ? marketCap + totalDebt - cash
+        : undefined;
+    const bookValuePerShare =
+      bal.totalStockholdersEquity !== undefined && inc.weightedAverageShsOut
+        ? bal.totalStockholdersEquity / inc.weightedAverageShsOut
+        : undefined;
+
+    ratios.push({
+      date: inc.date,
+      period: "FY",
+      currentRatio: div(bal.totalCurrentAssets, bal.totalCurrentLiabilities),
+      quickRatio: NaN,
+      cashRatio: NaN,
+      grossProfitMargin: div(inc.grossProfit, inc.revenue),
+      operatingProfitMargin: div(inc.operatingIncome, inc.revenue),
+      netProfitMargin: div(inc.netIncome, inc.revenue),
+      returnOnAssets: div(inc.netIncome, bal.totalAssets),
+      returnOnEquity: div(inc.netIncome, bal.totalStockholdersEquity),
+      debtRatio: div(totalDebt, bal.totalAssets),
+      debtEquityRatio: div(totalDebt, bal.totalStockholdersEquity),
+      priceEarningsRatio: div(price, inc.eps),
+      priceToBookRatio: price !== undefined ? div(price, bookValuePerShare) : NaN,
+      priceToSalesRatio: div(marketCap, inc.revenue),
+      priceToFreeCashFlowsRatio: div(marketCap, cf?.freeCashFlow),
+      enterpriseValueMultiple: div(enterpriseValue, inc.ebitda),
+      dividendYield: NaN,
+      payoutRatio: NaN,
+    });
+
+    keyMetrics.push({
+      date: inc.date,
+      period: "FY",
+      revenuePerShare: div(inc.revenue, inc.weightedAverageShsOut),
+      netIncomePerShare: inc.eps ?? NaN,
+      marketCap: marketCap ?? NaN,
+      enterpriseValue: enterpriseValue ?? NaN,
+      peRatio: div(price, inc.eps),
+      pbRatio: price !== undefined ? div(price, bookValuePerShare) : NaN,
+      evToSales: div(enterpriseValue, inc.revenue),
+      evToEbitda: div(enterpriseValue, inc.ebitda),
+      freeCashFlowYield: div(cf?.freeCashFlow, marketCap),
+      debtToEquity: div(totalDebt, bal.totalStockholdersEquity),
+      currentRatio: div(bal.totalCurrentAssets, bal.totalCurrentLiabilities),
+      roic: NaN,
+      workingCapital:
+        bal.totalCurrentAssets !== undefined && bal.totalCurrentLiabilities !== undefined
+          ? bal.totalCurrentAssets - bal.totalCurrentLiabilities
+          : NaN,
+      bookValuePerShare,
+    });
+  });
+
+  return { ratios, keyMetrics };
+}
+
+/** Same rationale as above — FMP's /financial-growth is permanently
+ * unavailable on the free plan, so year-over-year growth is computed
+ * directly from EDGAR's income statement (newest-first, like FMP's). */
+export async function getEdgarGrowth(symbol: string): Promise<FinancialGrowth[]> {
+  const income = await getEdgarIncomeStatement(symbol);
+  const growth: FinancialGrowth[] = [];
+
+  for (let i = 0; i < income.length - 1; i++) {
+    const cur = income[i];
+    const prev = income[i + 1];
+    growth.push({
+      date: cur.date,
+      period: "FY",
+      revenueGrowth: div(cur.revenue !== undefined && prev.revenue !== undefined ? cur.revenue - prev.revenue : undefined, prev.revenue),
+      grossProfitGrowth: div(
+        cur.grossProfit !== undefined && prev.grossProfit !== undefined ? cur.grossProfit - prev.grossProfit : undefined,
+        prev.grossProfit
+      ),
+      ebitgrowth: div(cur.ebitda !== undefined && prev.ebitda !== undefined ? cur.ebitda - prev.ebitda : undefined, prev.ebitda),
+      operatingIncomeGrowth: div(
+        cur.operatingIncome !== undefined && prev.operatingIncome !== undefined
+          ? cur.operatingIncome - prev.operatingIncome
+          : undefined,
+        prev.operatingIncome
+      ),
+      netIncomeGrowth: div(
+        cur.netIncome !== undefined && prev.netIncome !== undefined ? cur.netIncome - prev.netIncome : undefined,
+        prev.netIncome
+      ),
+      epsgrowth: div(cur.eps !== undefined && prev.eps !== undefined ? cur.eps - prev.eps : undefined, prev.eps),
+      epsdilutedGrowth: div(
+        cur.epsDiluted !== undefined && prev.epsDiluted !== undefined ? cur.epsDiluted - prev.epsDiluted : undefined,
+        prev.epsDiluted
+      ),
+      dividendsperShareGrowth: NaN,
+      freeCashFlowGrowth: NaN,
+    });
+  }
+
+  return growth;
 }

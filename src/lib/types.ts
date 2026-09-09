@@ -308,6 +308,7 @@ export interface FinancialsSection {
 
 export interface GrowthSection {
   growth: FinancialGrowth[];
+  debug?: Record<string, string>;
 }
 
 export interface DividendsSection {

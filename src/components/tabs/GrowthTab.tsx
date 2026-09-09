@@ -13,6 +13,7 @@ import {
 import type { GrowthSection } from "@/lib/types";
 import { useSection } from "@/lib/useSection";
 import FinancialTable from "@/components/FinancialTable";
+import DebugPanel from "@/components/DebugPanel";
 import { SectionError, SectionLoading } from "@/components/SectionState";
 import { growthRows } from "@/lib/tableRows";
 import { formatDate, formatPercent } from "@/lib/format";
@@ -38,6 +39,7 @@ export default function GrowthTab({ symbol }: { symbol: string }) {
 
   return (
     <div className="flex flex-col gap-4">
+      <DebugPanel debug={data.debug} />
       <div className="card p-4">
         <h3 className="mb-3 font-medium">{t("revenueNetIncomeGrowth")}</h3>
         <div className="h-72 w-full">
